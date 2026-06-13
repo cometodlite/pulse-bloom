@@ -130,6 +130,11 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
     position:absolute; inset:0; pointer-events:none;
     background:radial-gradient(ellipse 60% 40% at 50% 46%, rgba(176,124,255,.07) 0%, transparent 70%);
 }
+#title-cv { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+#title-bloom-display {
+    position:absolute; bottom:28px; left:50%; transform:translateX(-50%);
+    font-size:.78rem; letter-spacing:.08em; color:#7a6e9a; pointer-events:none;
+}
 
 /* settings screen */
 #ov-settings { overflow-y:auto; }
@@ -233,10 +238,11 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
 
     <!-- TITLE SCREEN -->
     <div class="overlay" id="ov-title">
+        <canvas id="title-cv"></canvas>
         <div class="title-glow"></div>
         <div class="title">PULSE BLOOM</div>
-        <div class="tagline">치는 게임이 아니라, 피우는 게임</div>
         <div class="title-start">탭하여 시작</div>
+        <div id="title-bloom-display">🌸 <span id="title-bloom-val">0</span></div>
     </div>
 
     <!-- SONG SELECT -->
@@ -334,6 +340,7 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
         <div class="r-line">SCORE <b id="r-score">0</b></div>
         <div class="r-line">ACCURACY <b id="r-acc">0%</b></div>
         <div class="r-line">MAX COMBO <b id="r-combo">0</b></div>
+        <div class="r-line" id="r-bloom-line" style="display:none">BLOOM 획득 <b id="r-bloom" style="color:#b07cff">+0</b> <span id="r-bloom-total" style="color:#6f6388;font-size:.8em"></span></div>
         <div class="r-line" id="r-timing-line" style="display:none">평균 타이밍 <b id="r-timing">0ms</b></div>
         <div class="r-grid">
             <div class="c"><div class="v" style="color:#5ee0ff" id="r-perfect">0</div><div class="k">PERFECT</div></div>
@@ -406,6 +413,49 @@ function saveSettings(){ try{
     localStorage.setItem('pulsebloom_settings', JSON.stringify({musicVol,sfxVol,inputOffset,hoverMode}));
 }catch(e){} }
 
+// ── bloom progress ──
+const BLOOM_MAX   = 1000;
+const BLOOM_FIRST  = {normal:10, chaotic:20, end:30, torment:40, '???':50};
+const BLOOM_REPEAT = {normal:3,  chaotic:5,  end:10, torment:15, '???':20};
+let progress = {clears:{}, bloom:0};
+
+function loadProgress(){ try{
+    const p=JSON.parse(localStorage.getItem('pulsebloom_progress')||'{}');
+    if(p&&typeof p==='object'){
+        progress.clears = p.clears||{};
+        progress.bloom  = +p.bloom||0;
+    }
+}catch(e){} }
+
+function saveProgress(){ try{
+    localStorage.setItem('pulsebloom_progress', JSON.stringify(progress));
+}catch(e){} }
+
+function awardBloom(){
+    if(!SONG) return 0;
+    const key=SONG.id+'|'+diff;
+    const prev=progress.clears[key]||0;
+    const amt=prev===0 ? (BLOOM_FIRST[diff]||10) : (BLOOM_REPEAT[diff]||3);
+    progress.clears[key]=prev+1;
+    progress.bloom=Math.min(BLOOM_MAX, progress.bloom+amt);
+    saveProgress();
+    return amt;
+}
+
+function getClearedRatio(){
+    if(!SONGS||!SONGS.length) return 0;
+    let total=0, done=0;
+    for(const s of SONGS){
+        const soon=s.comingSoon||[];
+        for(const d in s.charts){
+            if(soon.includes(d)) continue;
+            total++;
+            if((progress.clears[s.id+'|'+d]||0)>0) done++;
+        }
+    }
+    return total ? done/total : 0;
+}
+
 // game clock — inputOffset shifts the whole note timeline so a player with audio latency
 // (e.g. bluetooth) can line notes up to what they hear. Audio scheduling is unaffected.
 function songTime(){ return ctx ? ctx.currentTime - audioStart - inputOffset/1000 : -99; }
@@ -421,6 +471,7 @@ function b64ToArrayBuffer(b64){
 function initSongs(){
     if(!window.SONGS) throw new Error('songs.js 누락');
     SONGS = window.SONGS;
+    loadProgress();
 }
 
 function initAudio(){
@@ -476,6 +527,170 @@ function loadAudio(s){
         document.head.appendChild(sc);
     });
 }
+
+// ── title animation ──
+const titleCv = document.getElementById('title-cv');
+const titleG  = titleCv ? titleCv.getContext('2d') : null;
+let titleRaf  = 0;
+
+function resizeTitleCv(){
+    if(!titleCv) return;
+    const dpr=Math.min(window.devicePixelRatio||1,2);
+    titleCv.width  = window.innerWidth  * dpr;
+    titleCv.height = window.innerHeight * dpr;
+    titleG.setTransform(dpr,0,0,dpr,0,0);
+}
+
+function startTitleAnim(){
+    if(titleRaf||!titleG) return;
+    resizeTitleCv();
+    function frame(ts){
+        const tw=window.innerWidth, th=window.innerHeight;
+        const bRatio=Math.min(progress.bloom/BLOOM_MAX,1);
+        const cRatio=getClearedRatio();
+        // grayscale → colour based on total clears
+        document.getElementById('ov-title').style.filter=
+            `grayscale(${(1-cRatio).toFixed(3)}) brightness(${(0.62+0.38*cRatio).toFixed(3)})`;
+        // update bloom counter text
+        document.getElementById('title-bloom-val').textContent=progress.bloom.toLocaleString();
+
+        titleG.clearRect(0,0,tw,th);
+        drawTitleBeam(tw, th, bRatio);
+        drawTitleFlower(tw/2, th, bRatio, ts/1000);
+        titleRaf=requestAnimationFrame(frame);
+    }
+    titleRaf=requestAnimationFrame(frame);
+}
+
+function stopTitleAnim(){
+    if(titleRaf){ cancelAnimationFrame(titleRaf); titleRaf=0; }
+    if(titleCv) titleG.clearRect(0,0,titleCv.width,titleCv.height);
+    document.getElementById('ov-title').style.filter='';
+}
+
+function drawTitleBeam(tw, th, bRatio){
+    if(bRatio<0.08) return;
+    const alpha=(bRatio-0.08)/0.92;
+    const cx=tw/2, fy=th*0.76;
+    const topW=tw*0.44, botW=44;
+    const g2=titleG.createLinearGradient(cx,0,cx,fy);
+    g2.addColorStop(0,   `rgba(255,245,210,0)`);
+    g2.addColorStop(0.45,`rgba(255,245,210,${alpha*0.04})`);
+    g2.addColorStop(1,   `rgba(255,255,255,${alpha*0.13})`);
+    titleG.beginPath();
+    titleG.moveTo(cx-topW/2,0); titleG.lineTo(cx+topW/2,0);
+    titleG.lineTo(cx+botW/2,fy); titleG.lineTo(cx-botW/2,fy);
+    titleG.closePath();
+    titleG.fillStyle=g2; titleG.fill();
+}
+
+function drawTitleFlower(cx, th, bRatio, t){
+    const groundY = th*0.88;
+    const maxH    = Math.min(th*0.32, 190);
+
+    // soil
+    titleG.beginPath();
+    titleG.ellipse(cx, groundY, 46+20*bRatio, 9, 0, 0, Math.PI*2);
+    titleG.fillStyle=`rgba(55,32,16,${0.18+0.22*bRatio})`;
+    titleG.fill();
+
+    if(bRatio<0.015) return;
+
+    // stem grows to full height by 35% bloom
+    const stemGrow=Math.min(bRatio/0.35,1);
+    const stemH=maxH*stemGrow;
+    // gentle sway
+    const sway=Math.sin(t*0.9)*4*stemGrow;
+    const tipX=cx+sway, tipY=groundY-stemH;
+
+    // stem
+    titleG.beginPath();
+    titleG.moveTo(cx, groundY);
+    titleG.quadraticCurveTo(cx+12+sway*0.5, groundY-stemH*0.5, tipX, tipY);
+    titleG.strokeStyle='#5effa0'; titleG.lineWidth=3.5*stemGrow+0.5;
+    titleG.lineCap='round'; titleG.stroke();
+
+    // leaves (20%+)
+    if(bRatio>0.20){
+        const lp=Math.min((bRatio-0.20)/0.18,1);
+        const ls=30*lp;
+        const lx=cx+8, ly=groundY-stemH*0.44;
+        // left
+        titleG.beginPath();
+        titleG.moveTo(lx-3,ly);
+        titleG.bezierCurveTo(lx-ls*1.15,ly-ls*0.38, lx-ls*1.25,ly+ls*0.28, lx-3,ly+ls*0.52);
+        titleG.fillStyle='#5effa0'; titleG.fill();
+        // right (slightly higher)
+        const ly2=ly-stemH*0.14;
+        titleG.beginPath();
+        titleG.moveTo(lx+3,ly2);
+        titleG.bezierCurveTo(lx+ls*1.15,ly2-ls*0.38, lx+ls*1.25,ly2+ls*0.28, lx+3,ly2+ls*0.52);
+        titleG.fillStyle='#5effa0'; titleG.fill();
+    }
+
+    // flower head (35%+)
+    if(bRatio<=0.35) return;
+    const fp=Math.min((bRatio-0.35)/0.65,1);
+
+    if(fp<0.22){
+        // closed bud
+        const bp=fp/0.22;
+        titleG.beginPath();
+        titleG.ellipse(tipX, tipY-14*bp, 9*bp, 16*bp, 0, 0, Math.PI*2);
+        titleG.fillStyle='#b07cff'; titleG.fill();
+    } else {
+        const op=(fp-0.22)/0.78; // 0→1 as flower opens
+        const petalCount=6;
+        const petalLen=20+14*op;
+        const spread=op*petalLen*0.55;
+
+        // petals
+        for(let i=0;i<petalCount;i++){
+            const angle=(i/petalCount)*Math.PI*2-Math.PI/2;
+            drawTitlePetal(tipX+Math.cos(angle)*spread, tipY+Math.sin(angle)*spread,
+                           angle, petalLen, op);
+        }
+
+        // center dot
+        const cr=7+4*op;
+        titleG.beginPath(); titleG.arc(tipX,tipY,cr,0,Math.PI*2);
+        titleG.fillStyle='#ffd166'; titleG.fill();
+
+        // center glow when nearly full
+        if(op>0.65){
+            const ga=(op-0.65)/0.35;
+            const gl=titleG.createRadialGradient(tipX,tipY,0,tipX,tipY,cr*3.5);
+            gl.addColorStop(0,`rgba(255,209,102,${0.55*ga})`);
+            gl.addColorStop(1,`rgba(255,209,102,0)`);
+            titleG.beginPath(); titleG.arc(tipX,tipY,cr*3.5,0,Math.PI*2);
+            titleG.fillStyle=gl; titleG.fill();
+        }
+    }
+}
+
+function drawTitlePetal(cx,cy,angle,len,openness){
+    titleG.save();
+    titleG.translate(cx,cy);
+    titleG.rotate(angle+Math.PI/2);
+    const w=len*0.36;
+    // outer petal
+    titleG.beginPath();
+    titleG.moveTo(0,0);
+    titleG.bezierCurveTo(-w,-len*0.32, -w,-len*0.82, 0,-len);
+    titleG.bezierCurveTo( w,-len*0.82,  w,-len*0.32, 0, 0);
+    titleG.fillStyle=`rgba(176,124,255,${0.75+0.25*openness})`;
+    titleG.fill();
+    // inner highlight
+    titleG.beginPath();
+    titleG.moveTo(0,-len*0.08);
+    titleG.bezierCurveTo(-w*0.45,-len*0.38, -w*0.45,-len*0.78, 0,-len*0.88);
+    titleG.bezierCurveTo( w*0.45,-len*0.78,  w*0.45,-len*0.38, 0,-len*0.08);
+    titleG.fillStyle=`rgba(220,170,255,${0.35*openness})`;
+    titleG.fill();
+    titleG.restore();
+}
+
+window.addEventListener('resize', ()=>{ if(titleRaf) resizeTitleCv(); });
 
 // ── preview ──
 const PREVIEW_STARTS = { 'miss-master': 46, 'want-you': 125, 'cut-your-string': 53 };
@@ -1109,6 +1324,13 @@ function endGame(){
         else cb.style.display='none';
     } else { tl.style.display='none'; cb.style.display='none'; }
 
+    // bloom reward
+    const bloomEarned = awardBloom();
+    const bloomLine = document.getElementById('r-bloom-line');
+    bloomLine.style.display = '';
+    document.getElementById('r-bloom').textContent = '+' + bloomEarned;
+    document.getElementById('r-bloom-total').textContent = '(합계 ' + progress.bloom.toLocaleString() + ' / ' + BLOOM_MAX.toLocaleString() + ')';
+
     document.getElementById('ov-result').classList.remove('hidden');
 }
 
@@ -1246,12 +1468,14 @@ document.getElementById('back-songs').addEventListener('click', toSongSelect);
 document.getElementById('ov-title').addEventListener('click', ()=>{
     initAudio();
     buildSongList();
+    stopTitleAnim();
     document.getElementById('ov-title').classList.add('hidden');
     document.getElementById('ov-songs').classList.remove('hidden');
 });
 document.getElementById('back-title').addEventListener('click', ()=>{
     document.getElementById('ov-songs').classList.add('hidden');
     document.getElementById('ov-title').classList.remove('hidden');
+    startTitleAnim();
 });
 
 // settings navigation
@@ -1293,7 +1517,7 @@ window.addEventListener('keydown', e=>{
     }
 });
 
-try{ initSongs(); }catch(err){
+try{ initSongs(); startTitleAnim(); }catch(err){
     const ld=document.getElementById('songs-loading');
     ld.classList.remove('hidden'); ld.textContent='로드 실패: '+err.message;
     console.error(err);
