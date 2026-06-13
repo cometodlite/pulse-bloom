@@ -434,9 +434,7 @@ async function selectSong(s){
     document.getElementById('song-sub').innerHTML=(s.subtitle?'<span>'+s.subtitle+'</span>':'')
         + (s.isTutorial?'<span class="tutorial-badge">TUTORIAL</span>':'');
     buildDifficultyUI();
-    APPROACH = s.approach || 1.2;
-    const ap=document.getElementById('approach'); ap.value=APPROACH;
-    document.getElementById('approach-val').textContent=APPROACH.toFixed(1)+'초';
+    applyDiffApproach();
 
     const panel=document.getElementById('panel');
     panel.style.opacity='.4'; panel.style.pointerEvents='none';
@@ -984,13 +982,19 @@ function updateLevelLabel(){
     const ch=SONG.charts[diff]; const el=document.getElementById('diff-level');
     if(ch&&el) el.textContent='· Lv.'+ch.level;
 }
+function applyDiffApproach(){
+    const ch=SONG&&SONG.charts[diff];
+    APPROACH=(ch&&ch.approach) || (SONG&&SONG.approach) || 1.2;
+    const ap=document.getElementById('approach'); if(ap){ ap.value=APPROACH;
+        document.getElementById('approach-val').textContent=APPROACH.toFixed(1)+'초'; }
+}
 
 // ════════════════ UI WIRING ════════════════
 document.getElementById('seg-diff').addEventListener('click', e=>{
     const b=e.target.closest('button'); if(!b||b.disabled||b.classList.contains('locked')) return;
     document.querySelectorAll('#seg-diff button').forEach(x=>{ x.classList.remove('sel');
         if(!x.classList.contains('locked')){ const m=DIFF_META[x.dataset.d]; if(m) x.style.color=m[1]; } });
-    b.classList.add('sel'); b.style.color='#fff'; diff=b.dataset.d; updateLevelLabel();
+    b.classList.add('sel'); b.style.color='#fff'; diff=b.dataset.d; updateLevelLabel(); applyDiffApproach();
 });
 const apSlider=document.getElementById('approach');
 apSlider.addEventListener('input', ()=>{
