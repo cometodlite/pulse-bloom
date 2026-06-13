@@ -796,6 +796,7 @@ async function selectSong(s){
 // ── game data ──
 let SONG=null, SONGS=[];
 const COLORS=['#ff5ea8','#5ee0ff','#b07cff','#ffd166','#5effa0'];
+const JLINE=0.82;        // judgment line Y ratio (BLOOMING / RAINING)
 let objects=[];
 let diff='normal';
 let APPROACH=1.2;        // seconds telegraph
@@ -823,20 +824,32 @@ let cursor={x:0,y:0, on:false};   // real pointer position, for hover mode
 const HIT={ perfect:75, good:155, miss:200 }; // ms
 
 let captions=[];
+function getPhase(t, sections){
+    if(!sections||!sections.length) return 'blooming';
+    return [...sections].slice().reverse().find(s=>t>=s.startT)?.phase || 'blooming';
+}
 function buildObjects(){
     const chart = SONG.charts[diff];
     const raw = chart.objects;
     const chartShift = (chart.offset||0) / 1000; // ms → sec
-    objects = raw.map((o,i)=>({
-        t:o.t + chartShift, type:o.type, dur:o.dur||0,
-        nx:o.x, ny:o.y, hint:o.hint||null,
-        color:COLORS[i%COLORS.length],
-        state:'wait',          // wait -> approach -> held -> done
-        headJudge:null, holdEnd:0, lastTick:0, spawnShown:false
-    }));
+    const sections = chart.sections || [];
+    objects = raw.map((o,i)=>{
+        const t = o.t + chartShift;
+        return {
+            t, type:o.type, dur:o.dur||0,
+            nx:o.x, ny:o.y, hint:o.hint||null,
+            phase: getPhase(t, sections),
+            color:COLORS[i%COLORS.length],
+            state:'wait',
+            headJudge:null, holdEnd:0, lastTick:0, spawnShown:false
+        };
+    });
     captions = chart.captions || [];
 }
-function P(o){ return { x:o.nx*W, y:o.ny*H }; }
+function P(o){
+    if(o.phase==='blooming'||o.phase==='raining') return {x:o.nx*W, y:H*JLINE};
+    return {x:o.nx*W, y:o.ny*H};
+}
 
 // ════════════════ INPUT ════════════════
 function canvasPos(e){
@@ -873,8 +886,11 @@ function onDown(id,x,y){
         if(o.state==='done'||o.state==='held') continue;
         const dt=Math.abs(o.t-now)*1000;
         if(dt>HIT.miss) continue;
-        const p=P(o), dist=Math.hypot(x-p.x,y-p.y);
-        if(dist>R*1.75) continue;
+        const p=P(o);
+        const dist=o.phase==='blooming'
+            ? Math.abs(x-p.x)          // BLOOMING: X proximity only (Y fixed on line)
+            : Math.hypot(x-p.x,y-p.y);
+        if(dist>R*(o.phase==='blooming'?2.2:1.75)) continue;
         if(dt<bd){ bd=dt; best=o; }
     }
     if(!best){ pointers.set(id,{x,y}); return; }
@@ -1061,7 +1077,8 @@ function update(now){
             // hover mode (PC): cursor resting on a note auto-hits it at the right time, no click
             if(hoverMode && o.state==='approach' && cursor.on && now >= o.t - HIT.perfect/1000){
                 const p=P(o);
-                if(Math.hypot(cursor.x-p.x, cursor.y-p.y) <= R*1.75){
+                const hd=o.phase==='blooming'?Math.abs(cursor.x-p.x):Math.hypot(cursor.x-p.x,cursor.y-p.y);
+                if(hd <= R*(o.phase==='blooming'?2.2:1.75)){
                     const bd=Math.abs(now-o.t)*1000;
                     const j = bd<=HIT.perfect?'perfect': bd<=HIT.good?'good':'miss';
                     if(j!=='miss'){
@@ -1135,6 +1152,8 @@ function drawFollowPoints(now){
     }
     for(let i=0;i<vis.length-1;i++){
         const a=vis[i], b=vis[i+1];
+        // BLOOMING notes sit on the same Y line — connector adds no spatial info
+        if(a.phase==='blooming' && b.phase==='blooming') continue;
         const pa=P(a), pb=P(b);
         const dtA=a.t-now;
         const prog=1-Math.max(0,dtA/APPROACH);
@@ -1172,6 +1191,23 @@ function render(now){
         g.fillStyle=hexA(pt.color, pt.life*0.8); g.fill();
     }
     g.globalCompositeOperation='source-over';
+
+    // judgment line (BLOOMING / RAINING phases)
+    const jy=H*JLINE;
+    const hasJLine=objects.some(o=>o.phase!=='crowning'&&o.state!=='wait'&&o.state!=='done');
+    if(hasJLine){
+        g.save();
+        g.strokeStyle='rgba(255,255,255,0.10)';
+        g.lineWidth=1.5;
+        g.beginPath(); g.moveTo(0,jy); g.lineTo(W,jy); g.stroke();
+        // subtle glow under line
+        const lg=g.createLinearGradient(0,jy-14,0,jy+14);
+        lg.addColorStop(0,'rgba(180,120,255,0)');
+        lg.addColorStop(0.5,'rgba(180,120,255,0.07)');
+        lg.addColorStop(1,'rgba(180,120,255,0)');
+        g.fillStyle=lg; g.fillRect(0,jy-14,W,28);
+        g.restore();
+    }
 
     // A: follow-point connectors
     drawFollowPoints(now);
@@ -1233,18 +1269,15 @@ function render(now){
 }
 
 function drawObject(o,p,appT,now){
-    const isHold = o.type==='hold';
-    const col=o.color;
-    // approach ring
-    const ringR = R*(1 + appT*(isDense()?2.2:3.0));
+    if(o.phase==='blooming'){ drawBloomingNote(o,p,appT,now); return; }
+    // CROWNING (original OSU!-style)
+    const isHold=o.type==='hold', col=o.color;
+    const ringR=R*(1+appT*(isDense()?2.2:3.0));
     g.beginPath(); g.arc(p.x,p.y,ringR,0,Math.PI*2);
-    g.strokeStyle=hexA(col, 0.85*(1-appT*0.3)); g.lineWidth=3; g.stroke();
-
-    // zone body
+    g.strokeStyle=hexA(col,0.85*(1-appT*0.3)); g.lineWidth=3; g.stroke();
     g.beginPath(); g.arc(p.x,p.y,R,0,Math.PI*2);
     if(isHold){
         g.strokeStyle=hexA(col,0.95); g.lineWidth=4; g.stroke();
-        // inner glow for hold
         const ig=g.createRadialGradient(p.x,p.y,0,p.x,p.y,R);
         ig.addColorStop(0,hexA(col,0.18)); ig.addColorStop(1,hexA(col,0));
         g.fillStyle=ig; g.fill();
@@ -1255,34 +1288,85 @@ function drawObject(o,p,appT,now){
         g.beginPath(); g.arc(p.x,p.y,R,0,Math.PI*2);
         g.strokeStyle=hexA('#ffffff',0.5); g.lineWidth=2; g.stroke();
     }
-
-    // hold progress arc (while held)
     if(o.state==='held'){
         const frac=Math.max(0,Math.min(1,(now-o.t)/(o.dur||0.001)));
-        g.beginPath();
-        g.arc(p.x,p.y,R*1.25,-Math.PI/2, -Math.PI/2 + frac*Math.PI*2);
+        g.beginPath(); g.arc(p.x,p.y,R*1.25,-Math.PI/2,-Math.PI/2+frac*Math.PI*2);
         g.strokeStyle=hexA('#ffffff',0.9); g.lineWidth=5; g.stroke();
-        // pulsing core
         g.beginPath(); g.arc(p.x,p.y,R*(0.5+0.15*Math.sin(now*20)),0,Math.PI*2);
         g.fillStyle=hexA(col,0.5); g.fill();
     }
-
-    // hold tail length hint (faint) before pressing
     if(isHold && o.state==='approach'){
         g.font='600 '+Math.round(R*0.5)+'px Segoe UI'; g.textAlign='center'; g.textBaseline='middle';
         g.fillStyle=hexA('#ffffff',0.6); g.fillText('HOLD', p.x, p.y);
     }
-
-    // teaching hint (tutorial) — emphasis ring + label + pointer
     if(o.hint && (o.state==='approach'||o.state==='held')){
         const pl=0.5+0.4*Math.sin(now*7);
         g.beginPath(); g.arc(p.x,p.y,R*(1.55+0.12*Math.sin(now*7)),0,Math.PI*2);
         g.strokeStyle=hexA('#ffffff',pl); g.lineWidth=2; g.stroke();
-        const ly=p.y - R*1.9;
+        const ly=p.y-R*1.9;
         g.font='700 '+Math.round(R*0.42)+'px Segoe UI'; g.textAlign='center'; g.textBaseline='bottom';
         g.fillStyle='#fff'; g.fillText(o.hint, p.x, ly);
         g.beginPath(); g.moveTo(p.x,p.y-R*1.5); g.lineTo(p.x-7,p.y-R*1.5-11); g.lineTo(p.x+7,p.y-R*1.5-11);
         g.closePath(); g.fillStyle=hexA('#ffffff',pl); g.fill();
+    }
+}
+
+function drawBloomingNote(o,p,appT,now){
+    const col=o.color, isHold=o.type==='hold';
+    const prog=1-appT;                                    // 0=just appeared, 1=hit time
+    const bR=R*Math.pow(Math.max(0,prog),0.65);
+    const dt=o.t-now;
+    const missFrac=dt<0?Math.min(1,Math.abs(dt)/(HIT.miss/1000)):0;
+    const a=1-missFrac*0.55;
+    if(bR<1) return;
+
+    // outer petals glow (fades in near peak)
+    if(prog>0.65){
+        const glowA=(prog-0.65)/0.35;
+        const pulse=prog>0.92?1+0.12*Math.sin(now*22):1;
+        const gR=bR*pulse*1.6;
+        const gr=g.createRadialGradient(p.x,p.y,bR*0.5,p.x,p.y,gR);
+        gr.addColorStop(0,hexA(col,0.28*glowA*a));
+        gr.addColorStop(1,hexA(col,0));
+        g.globalCompositeOperation='lighter';
+        g.fillStyle=gr; g.beginPath(); g.arc(p.x,p.y,gR,0,Math.PI*2); g.fill();
+        g.globalCompositeOperation='source-over';
+    }
+
+    // main bloom body
+    if(isHold){
+        g.beginPath(); g.arc(p.x,p.y,bR,0,Math.PI*2);
+        g.strokeStyle=hexA(col,0.92*a); g.lineWidth=3.5; g.stroke();
+        const ig=g.createRadialGradient(p.x,p.y,0,p.x,p.y,bR);
+        ig.addColorStop(0,hexA(col,0.18*a)); ig.addColorStop(1,hexA(col,0));
+        g.fillStyle=ig; g.beginPath(); g.arc(p.x,p.y,bR,0,Math.PI*2); g.fill();
+    } else {
+        const rg=g.createRadialGradient(p.x,p.y,0,p.x,p.y,bR);
+        rg.addColorStop(0,hexA(col,0.88*a)); rg.addColorStop(0.65,hexA(col,0.45*a)); rg.addColorStop(1,hexA(col,0.04));
+        g.fillStyle=rg; g.beginPath(); g.arc(p.x,p.y,bR,0,Math.PI*2); g.fill();
+        g.beginPath(); g.arc(p.x,p.y,bR,0,Math.PI*2);
+        g.strokeStyle=hexA('#ffffff',0.45*a); g.lineWidth=1.8; g.stroke();
+    }
+
+    // hold: progress arc + pulsing core while held
+    if(o.state==='held'){
+        const frac=Math.max(0,Math.min(1,(now-o.t)/(o.dur||0.001)));
+        g.beginPath(); g.arc(p.x,p.y,R*1.22,-Math.PI/2,-Math.PI/2+frac*Math.PI*2);
+        g.strokeStyle=hexA('#ffffff',0.88); g.lineWidth=5; g.stroke();
+        g.beginPath(); g.arc(p.x,p.y,R*(0.48+0.14*Math.sin(now*20)),0,Math.PI*2);
+        g.fillStyle=hexA(col,0.5); g.fill();
+    }
+    if(isHold && o.state==='approach' && prog>0.4){
+        g.font='600 '+Math.round(bR*0.6)+'px Segoe UI'; g.textAlign='center'; g.textBaseline='middle';
+        g.fillStyle=hexA('#ffffff',0.6*(prog-0.4)/0.6*a); g.fillText('HOLD', p.x, p.y);
+    }
+    if(o.hint && (o.state==='approach'||o.state==='held')){
+        const pl=0.5+0.4*Math.sin(now*7);
+        g.beginPath(); g.arc(p.x,p.y,bR*(1.55+0.12*Math.sin(now*7)),0,Math.PI*2);
+        g.strokeStyle=hexA('#ffffff',pl*a); g.lineWidth=2; g.stroke();
+        const ly=p.y-bR*2.0;
+        g.font='700 '+Math.round(R*0.42)+'px Segoe UI'; g.textAlign='center'; g.textBaseline='bottom';
+        g.fillStyle=hexA('#fff',a); g.fillText(o.hint, p.x, ly);
     }
 }
 
