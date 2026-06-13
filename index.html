@@ -1572,40 +1572,76 @@ window.addEventListener('popstate', ()=>{
 
 // ════════════════ DEV UTILITIES ════════════════
 window.PBDEV = {
+    // 시도할 격자 후보: 4분, 4분셋잇단, 8분, 8분셋잇단, 16분, 16분셋잇단
+    GRIDS: [4, 6, 8, 12, 16, 24],
+    GRID_NAMES: {4:'4분',6:'4분셋',8:'8분',12:'8분셋',16:'16분',24:'16분셋'},
+    THRESHOLD_MS: 25, // 이 이상이면 의도적 엇박으로 간주, 스냅 안 함
+
     _bpmMap(song){
         return song.bpmMap || [{bpm: song.bpm, startSec: song.offset||0}];
     },
-    _snapT(t, bpmMap, subdivision){
+    // 단일 subdivision 기준 스냅 위치와 오차 반환
+    _trySnap(t, seg, sub){
+        const beat = 60 / seg.bpm / (sub / 4);
+        const snapped = Math.round((t - seg.startSec) / beat) * beat + seg.startSec;
+        return { snapped, errMs: Math.abs(t - snapped) * 1000 };
+    },
+    // 모든 격자 후보를 시도해 가장 가까운 것 선택, threshold 초과 시 null 반환
+    _snapT(t, bpmMap, threshold){
+        const th = threshold ?? this.THRESHOLD_MS;
         const segs = [...bpmMap].sort((a,b)=>a.startSec-b.startSec);
         const seg = [...segs].reverse().find(s=>t>=s.startSec) || segs[0];
-        const beat = 60 / seg.bpm / (subdivision / 4);
-        return Math.round((t - seg.startSec) / beat) * beat + seg.startSec;
+        let best = null;
+        for(const sub of this.GRIDS){
+            const r = this._trySnap(t, seg, sub);
+            if(!best || r.errMs < best.errMs) best = {...r, sub};
+        }
+        if(best.errMs > th) return null; // 의도적 엇박 — 건드리지 않음
+        return best;
     },
-    // PBDEV.analyze('miss-master','normal') — 박자 오차가 큰 노트 표시
-    analyze(songId, diff, subdivision=16){
+
+    // PBDEV.analyze('miss-master','normal') — 격자별 분류 + 스냅 안 된 노트 목록
+    analyze(songId, diff){
         const song = window.SONGS.find(s=>s.id===songId);
         const chart = song?.charts[diff];
         if(!chart){ console.error('Not found:', songId, diff); return; }
         const map = this._bpmMap(song);
+        const th = this.THRESHOLD_MS;
         const rows = chart.objects.map((o,i)=>{
-            const sn = this._snapT(o.t, map, subdivision);
-            const errMs = Math.round((o.t - sn)*1000);
-            return {i, t:o.t, snapped:Math.round(sn*1000)/1000, errMs};
+            const r = this._snapT(o.t, map, th);
+            return r
+                ? {i, t:o.t, snapped:Math.round(r.snapped*1000)/1000,
+                   errMs:Math.round(r.errMs), grid:this.GRID_NAMES[r.sub]||r.sub, status:'✓'}
+                : {i, t:o.t, snapped:'—', errMs:'—', grid:'—', status:'⚠ 엇박/수동확인필요'};
         });
-        const abs = rows.map(r=>Math.abs(r.errMs));
-        console.log(`[PBDEV] ${songId}/${diff} | ${rows.length} notes | max ${Math.max(...abs)}ms | avg ${(abs.reduce((a,b)=>a+b,0)/abs.length).toFixed(1)}ms`);
-        console.table(rows.filter(r=>Math.abs(r.errMs)>20));
+        const snapped = rows.filter(r=>r.status==='✓');
+        const skipped = rows.filter(r=>r.status!=='✓');
+        const errs = snapped.map(r=>r.errMs);
+        console.log(`[PBDEV] ${songId}/${diff} | 총 ${rows.length}개 | 스냅 ${snapped.length}개 | 엇박 보류 ${skipped.length}개`);
+        if(errs.length) console.log(`  오차: max ${Math.max(...errs)}ms / avg ${(errs.reduce((a,b)=>a+b,0)/errs.length).toFixed(1)}ms`);
+        const gridCount = {};
+        snapped.forEach(r=>{ gridCount[r.grid]=(gridCount[r.grid]||0)+1; });
+        console.log('  격자 분포:', gridCount);
+        if(skipped.length){ console.warn('  엇박/수동확인 필요:'); console.table(skipped); }
         return rows;
     },
-    // PBDEV.snap('miss-master','normal') — 스냅된 objects JSON 출력 (songs.js에 붙여넣기)
-    snap(songId, diff, subdivision=16){
+
+    // PBDEV.snap('miss-master','normal') — 스냅 가능한 노트만 보정, 엇박은 원본 유지
+    // threshold 인자로 허용 오차(ms) 조정 가능 (기본 25ms)
+    snap(songId, diff, threshold){
         const song = window.SONGS.find(s=>s.id===songId);
         const chart = song?.charts[diff];
         if(!chart){ console.error('Not found:', songId, diff); return; }
         const map = this._bpmMap(song);
-        const out = chart.objects.map(o=>({
-            ...o, t: Math.round(this._snapT(o.t, map, subdivision)*1000)/1000
-        }));
+        const th = threshold ?? this.THRESHOLD_MS;
+        let snapCnt=0, skipCnt=0;
+        const out = chart.objects.map(o=>{
+            const r = this._snapT(o.t, map, th);
+            if(r){ snapCnt++; return {...o, t:Math.round(r.snapped*1000)/1000}; }
+            skipCnt++;
+            return o; // 엇박: 원본 그대로
+        });
+        console.log(`[PBDEV] 스냅 ${snapCnt}개 / 엇박 원본유지 ${skipCnt}개`);
         console.log(JSON.stringify(out));
         console.info('[PBDEV] 위 JSON을 songs.js의 해당 chart.objects에 붙여넣으세요.');
         return out;
