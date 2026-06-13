@@ -1288,11 +1288,16 @@ function render(now){
 function drawObject(o,p,appT,now){
     if(o.phase==='blooming'){ drawBloomingNote(o,p,appT,now); return; }
     if(o.phase==='raining'){  drawRainingNote(o,p,appT,now);  return; }
-    // CROWNING (original OSU!-style)
+    drawCrowningNote(o,p,appT,now);
+}
+
+function drawCrowningNote(o,p,appT,now){
     const isHold=o.type==='hold', col=o.color;
+    // approach ring (shrinks inward as note arrives)
     const ringR=R*(1+appT*(isDense()?2.2:3.0));
     g.beginPath(); g.arc(p.x,p.y,ringR,0,Math.PI*2);
     g.strokeStyle=hexA(col,0.85*(1-appT*0.3)); g.lineWidth=3; g.stroke();
+    // note body
     g.beginPath(); g.arc(p.x,p.y,R,0,Math.PI*2);
     if(isHold){
         g.strokeStyle=hexA(col,0.95); g.lineWidth=4; g.stroke();
