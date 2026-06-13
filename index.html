@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>PULSE BLOOM</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body { height:100%; overflow:hidden; }
+body {
+    background:#05030a;
+    color:#fff;
+    font-family:'Segoe UI','Helvetica Neue',sans-serif;
+    user-select:none;
+    touch-action:none;
+}
+#stage { position:fixed; inset:0; }
+canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+
+/* HUD */
+#hud {
+    position:absolute; top:0; left:0; right:0;
+    display:flex; justify-content:space-between; align-items:flex-start;
+    padding:18px 24px; z-index:10; pointer-events:none;
+    font-variant-numeric:tabular-nums;
+}
+#hud .left  { text-align:left; }
+#hud .right { text-align:right; }
+#score { font-size:2rem; font-weight:700; letter-spacing:.02em;
+         text-shadow:0 0 18px rgba(255,255,255,.25); }
+#acc   { font-size:.85rem; color:#9a8fb5; margin-top:2px; }
+#combo { font-size:1.5rem; font-weight:700; color:#ff8fd0; text-shadow:0 0 16px rgba(255,143,208,.5); }
+#auto-badge {
+    display:inline-block; margin-top:4px; font-size:.7rem; letter-spacing:.18em;
+    color:#5ee0ff; border:1px solid rgba(94,224,255,.5); border-radius:20px;
+    padding:2px 10px; opacity:0;
+}
+#auto-badge.on { opacity:1; }
+
+/* overlays */
+.overlay {
+    position:absolute; inset:0; z-index:30;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background:radial-gradient(ellipse at center, rgba(20,8,35,.82), rgba(5,3,10,.96));
+    backdrop-filter:blur(3px);
+    text-align:center; padding:24px;
+}
+.title {
+    font-size:clamp(2.6rem,9vw,4.6rem); font-weight:800; letter-spacing:.04em; line-height:1;
+    background:linear-gradient(120deg,#ff5ea8,#b07cff 45%,#5ee0ff);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+    filter:drop-shadow(0 0 26px rgba(176,124,255,.45));
+}
+.song { color:#b9a9d6; letter-spacing:.16em; font-size:.85rem; margin-top:10px; }
+.tagline { color:#5b4f72; font-size:.78rem; margin-top:4px; letter-spacing:.05em; }
+
+.panel { margin-top:30px; width:min(440px,90vw); display:flex; flex-direction:column; gap:18px; }
+.row { display:flex; flex-direction:column; gap:8px; }
+.row .lbl { font-size:.72rem; letter-spacing:.16em; color:#6f6388; text-transform:uppercase; }
+
+.seg { display:flex; gap:8px; }
+.seg button {
+    flex:1; padding:11px 0; border-radius:12px; cursor:pointer;
+    border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.04);
+    color:#cdbff0; font-size:.9rem; font-family:inherit; transition:.15s; letter-spacing:.05em;
+}
+.seg button.sel { border-color:#b07cff; background:rgba(176,124,255,.2); color:#fff;
+                  box-shadow:0 0 20px rgba(176,124,255,.3); }
+.seg.diff button.sel.easy   { border-color:#5effa0; background:rgba(94,255,160,.18); box-shadow:0 0 20px rgba(94,255,160,.25);}
+.seg.diff button.sel.normal { border-color:#ffd166; background:rgba(255,209,102,.18); box-shadow:0 0 20px rgba(255,209,102,.25);}
+.seg.diff button.sel.hard   { border-color:#ff5ea8; background:rgba(255,94,168,.18); box-shadow:0 0 20px rgba(255,94,168,.25);}
+
+.slider-row { display:flex; align-items:center; gap:12px; }
+input[type=range]{ -webkit-appearance:none; flex:1; height:4px; border-radius:4px;
+    background:linear-gradient(90deg,#b07cff,#5ee0ff); outline:none; }
+input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; height:18px;
+    border-radius:50%; background:#fff; cursor:pointer; box-shadow:0 0 10px rgba(255,255,255,.6); }
+.sval { width:62px; text-align:right; color:#cdbff0; font-size:.85rem; font-variant-numeric:tabular-nums; }
+
+.toggle { display:flex; align-items:center; justify-content:space-between;
+    padding:12px 16px; border:1px solid rgba(255,255,255,.12); border-radius:12px;
+    background:rgba(255,255,255,.03); cursor:pointer; }
+.toggle .t-lbl { font-size:.9rem; color:#cdbff0; }
+.toggle .t-sub { font-size:.7rem; color:#6f6388; margin-top:2px; }
+.switch { width:46px; height:26px; border-radius:20px; background:rgba(255,255,255,.12);
+    position:relative; transition:.2s; flex-shrink:0; }
+.switch::after{ content:''; position:absolute; top:3px; left:3px; width:20px; height:20px;
+    border-radius:50%; background:#fff; transition:.2s; }
+.toggle.on .switch{ background:linear-gradient(90deg,#5ee0ff,#b07cff); }
+.toggle.on .switch::after{ left:23px; }
+
+.play-btn {
+    margin-top:8px; padding:16px; border:none; border-radius:16px; cursor:pointer;
+    font-size:1.15rem; font-weight:700; font-family:inherit; letter-spacing:.08em; color:#fff;
+    background:linear-gradient(120deg,#ff5ea8,#b07cff,#5ee0ff);
+    box-shadow:0 8px 32px rgba(176,124,255,.4); transition:.12s;
+}
+.play-btn:hover{ transform:translateY(-2px); box-shadow:0 12px 40px rgba(255,94,168,.45); }
+.play-btn:active{ transform:translateY(0); }
+.play-btn:disabled{ opacity:.5; cursor:default; transform:none; }
+
+.howto { margin-top:22px; color:#5b4f72; font-size:.74rem; line-height:1.9; max-width:380px; }
+.howto b { color:#9a8fb5; }
+
+/* result */
+#grade { font-size:clamp(5rem,18vw,8rem); font-weight:800; line-height:.9;
+         filter:drop-shadow(0 0 40px currentColor); }
+.r-line { color:#8a7da6; margin:5px 0; font-size:.95rem; }
+.r-line b { color:#fff; font-size:1.15rem; margin-left:6px; }
+.r-grid { display:flex; gap:22px; margin:18px 0; }
+.r-grid .c { text-align:center; }
+.r-grid .v { font-size:1.5rem; font-weight:700; }
+.r-grid .k { font-size:.68rem; color:#6f6388; letter-spacing:.12em; margin-top:2px; }
+.r-btns { display:flex; gap:12px; margin-top:8px; flex-wrap:wrap; justify-content:center; }
+#timing-live { font-size:.82rem; margin-top:6px; font-variant-numeric:tabular-nums; text-align:right; min-height:18px; }
+.ghost.cal { border-color:#5ee0ff; color:#5ee0ff; }
+.ghost.cal:disabled { opacity:.6; }
+.ghost { background:transparent; border:1px solid rgba(255,255,255,.2); color:#cdbff0;
+    padding:12px 26px; border-radius:14px; cursor:pointer; font-family:inherit; font-size:.92rem; }
+.hidden { display:none !important; }
+
+.song-sub { margin-top:6px; display:flex; gap:10px; align-items:center; justify-content:center;
+    color:#8a7da6; font-size:.8rem; letter-spacing:.1em; }
+.tutorial-badge { font-size:.62rem; letter-spacing:.18em; color:#5ee0ff;
+    border:1px solid rgba(94,224,255,.5); border-radius:20px; padding:2px 9px; }
+#diff-level { color:#cdbff0; font-size:.7rem; letter-spacing:.05em; }
+.seg.diff { flex-wrap:wrap; }
+.seg.diff button { font-size:.72rem; padding:9px 4px; letter-spacing:.01em; min-width:62px; }
+.seg.diff button.locked { opacity:.35; cursor:not-allowed; border-color:rgba(255,255,255,.1);
+    background:rgba(255,255,255,.02); color:#6f6388; }
+.seg.diff button.locked:hover { transform:none; }
+
+/* song select */
+.song-list { display:flex; flex-direction:column; gap:14px; width:min(460px,92vw); margin-top:26px; }
+.song-card { text-align:left; padding:18px 20px; border-radius:16px; cursor:pointer;
+    border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.035); transition:.15s; }
+.song-card:hover { border-color:#b07cff; background:rgba(176,124,255,.12); transform:translateY(-2px);
+    box-shadow:0 10px 30px rgba(176,124,255,.25); }
+.song-card:active { transform:translateY(0); }
+.sc-title { font-size:1.25rem; font-weight:700; color:#fff; letter-spacing:.01em; }
+.sc-sub { font-size:.78rem; color:#8a7da6; margin-top:2px; }
+.sc-meta { font-size:.72rem; color:#6f6388; margin-top:6px; font-variant-numeric:tabular-nums; }
+.sc-diffs { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+.dchip { font-size:.64rem; letter-spacing:.06em; padding:3px 9px; border-radius:20px;
+    border:1px solid currentColor; font-weight:600; }
+.dchip.tut { color:#5ee0ff; border-color:rgba(94,224,255,.5); }
+.back-btn { position:absolute; top:22px; left:22px; padding:8px 16px; border-radius:20px; cursor:pointer;
+    border:1px solid rgba(255,255,255,.18); background:rgba(255,255,255,.05); color:#cdbff0;
+    font-family:inherit; font-size:.82rem; }
+.back-btn:hover { border-color:#b07cff; color:#fff; }
+#songs-loading { color:#9a8fb5; font-size:.85rem; letter-spacing:.1em; margin-top:14px; }
+
+.lbl-sub { color:#6f6388; font-size:.62rem; letter-spacing:.02em; text-transform:none; }
+.mini-btn { flex-shrink:0; padding:6px 12px; border-radius:9px; cursor:pointer; font-family:inherit;
+    font-size:.78rem; color:#cdbff0; border:1px solid rgba(94,224,255,.4); background:rgba(94,224,255,.06); }
+.mini-btn:hover { border-color:#5ee0ff; background:rgba(94,224,255,.18); color:#fff; }
+
+/* in-game offset calibration modal */
+#igcal { position:fixed; inset:0; z-index:40; display:flex; align-items:center; justify-content:center;
+    background:rgba(5,3,10,.82); backdrop-filter:blur(4px); }
+#igcal.hidden { display:none !important; }
+.igcal-box { background:#0d0a18; border:1px solid rgba(176,124,255,.3); border-radius:18px;
+    padding:26px; width:min(440px,92vw); text-align:center; box-shadow:0 20px 60px rgba(0,0,0,.6); }
+.igcal-box .it { font-size:1.15rem; font-weight:700; color:#cdbff0; }
+.igcal-box .id { color:#8a7da6; font-size:.82rem; line-height:1.7; margin:12px 0 18px; }
+.igcal-box .id kbd { background:rgba(255,255,255,.1); border-radius:4px; padding:1px 6px; font-family:monospace; color:#cdbff0; }
+.igcal-beat { width:66px; height:66px; border-radius:50%; margin:0 auto 16px;
+    border:3px solid rgba(176,124,255,.3); background:rgba(176,124,255,.05); transition:.05s; }
+.igcal-beat.flash { background:#b07cff; border-color:#fff; box-shadow:0 0 30px rgba(176,124,255,.8); transform:scale(1.12); }
+.igcal-beat.measuring { animation: igbreath 1.7s ease-in-out infinite; }   /* slow, NOT a beat cue — tap to sound */
+@keyframes igbreath { 50% { transform:scale(1.07); border-color:rgba(176,124,255,.6); background:rgba(176,124,255,.12); } }
+.igcal-pad { width:100%; padding:28px 0; border-radius:14px; cursor:pointer; font-size:1rem; font-weight:700;
+    color:#cdbff0; border:2px dashed rgba(94,224,255,.4); background:rgba(94,224,255,.05); font-family:inherit; transition:.05s; }
+.igcal-pad.hit { background:rgba(94,224,255,.22); border-color:#5ee0ff; color:#fff; }
+.igcal-read { margin:16px 0; font-size:.9rem; color:#e8e2f5; min-height:22px; }
+.igcal-read b { color:#5ee0ff; }
+.igcal-btns { display:flex; gap:10px; justify-content:center; }
+.igcal-btns button { padding:10px 18px; border-radius:10px; cursor:pointer; font-family:inherit; font-size:.88rem;
+    border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.05); color:#cdbff0; }
+.igcal-btns button.pri { background:linear-gradient(120deg,#ff5ea8,#b07cff); border:none; color:#fff; font-weight:700; }
+.igcal-btns button:disabled { opacity:.4; cursor:default; }
+
+#loading { color:#9a8fb5; font-size:.85rem; letter-spacing:.1em; margin-top:14px; }
+.spinner { width:26px; height:26px; border:3px solid rgba(176,124,255,.2);
+    border-top-color:#b07cff; border-radius:50%; animation:spin .8s linear infinite; margin:14px auto 0; }
+@keyframes spin { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="stage">
+    <canvas id="cv"></canvas>
+
+    <div id="hud">
+        <div class="left">
+            <div id="score">0</div>
+            <div id="acc">100.00%</div>
+            <div id="auto-badge">● AUTO PLAY</div>
+        </div>
+        <div class="right">
+            <div id="combo">0</div>
+            <div id="timing-live"></div>
+        </div>
+    </div>
+
+    <!-- SONG SELECT -->
+    <div class="overlay" id="ov-songs">
+        <div class="title" style="font-size:clamp(2rem,7vw,3.4rem)">PULSE&nbsp;BLOOM</div>
+        <div class="tagline">곡을 선택하세요</div>
+        <div class="song-list" id="song-list"></div>
+        <div class="spinner hidden" id="songs-spinner"></div>
+        <div id="songs-loading" class="hidden">불러오는 중…</div>
+    </div>
+
+    <!-- START / SETUP -->
+    <div class="overlay hidden" id="ov-start">
+        <button class="back-btn" id="back-songs">← 곡 선택</button>
+        <div class="song" id="song-title">— LOADING —</div>
+        <div class="song-sub" id="song-sub"></div>
+        <div class="tagline">치는 게임이 아니라, 피우는 게임</div>
+
+        <div class="panel" id="panel" style="opacity:.4;pointer-events:none">
+            <div class="row">
+                <span class="lbl">난이도 <span id="diff-level"></span></span>
+                <div class="seg diff" id="seg-diff"></div>
+            </div>
+            <div class="row">
+                <span class="lbl">예고 시간 (접근)</span>
+                <div class="slider-row">
+                    <input type="range" id="approach" min="0.4" max="3.0" step="0.1" value="1.2">
+                    <span class="sval" id="approach-val">1.2초</span>
+                </div>
+            </div>
+            <div class="toggle" id="auto-toggle">
+                <div>
+                    <div class="t-lbl">컴퓨터 플레이 (오토)</div>
+                    <div class="t-sub">컴퓨터가 자동으로 완벽하게 플레이</div>
+                </div>
+                <div class="switch"></div>
+            </div>
+            <div class="toggle" id="hover-toggle">
+                <div>
+                    <div class="t-lbl">호버 모드 (PC)</div>
+                    <div class="t-sub">마우스를 노트 위에 올려두면 클릭 없이 자동 타격</div>
+                </div>
+                <div class="switch"></div>
+            </div>
+            <div class="row">
+                <span class="lbl">음악 볼륨</span>
+                <div class="slider-row">
+                    <input type="range" id="music-vol" min="0" max="100" step="1" value="80">
+                    <span class="sval" id="music-vol-val">80%</span>
+                </div>
+            </div>
+            <div class="row">
+                <span class="lbl">효과음 볼륨</span>
+                <div class="slider-row">
+                    <input type="range" id="sfx-vol" min="0" max="100" step="1" value="70">
+                    <span class="sval" id="sfx-vol-val">70%</span>
+                </div>
+            </div>
+            <div class="row">
+                <span class="lbl">입력 오프셋 <span class="lbl-sub">블루투스 이어폰이면 🎯 보정 권장</span></span>
+                <div class="slider-row">
+                    <input type="range" id="ingame-offset" min="-300" max="300" step="5" value="0">
+                    <span class="sval" id="ingame-offset-val">0 ms</span>
+                    <button class="mini-btn" id="ig-cal-open">🎯 보정</button>
+                </div>
+            </div>
+            <button class="play-btn" id="play-btn">▶ 시작</button>
+        </div>
+
+        <div class="spinner" id="spinner"></div>
+        <div id="loading">음악과 채보를 불러오는 중…</div>
+
+        <div class="howto">
+            화면에 <b>원</b>이 나타나고 바깥 링이 줄어듭니다.<br>
+            링이 원에 딱 맞을 때 <b>그 자리를 누르세요</b>.<br>
+            <b>속이 빈 원</b>은 누른 채로 <b>꾹 홀드</b> — 잘 누를수록 꽃이 핍니다.<br>
+            <span style="color:#6f6388">PC: 마우스 · 모바일: 터치(멀티터치 지원)</span>
+        </div>
+    </div>
+
+    <!-- COUNTDOWN handled on canvas -->
+
+    <!-- RESULT -->
+    <div class="overlay hidden" id="ov-result">
+        <div class="title" style="font-size:clamp(1.8rem,6vw,2.6rem)">RESULT</div>
+        <div id="grade">A</div>
+        <div class="r-line">SCORE <b id="r-score">0</b></div>
+        <div class="r-line">ACCURACY <b id="r-acc">0%</b></div>
+        <div class="r-line">MAX COMBO <b id="r-combo">0</b></div>
+        <div class="r-line" id="r-timing-line" style="display:none">평균 타이밍 <b id="r-timing">0ms</b></div>
+        <div class="r-grid">
+            <div class="c"><div class="v" style="color:#5ee0ff" id="r-perfect">0</div><div class="k">PERFECT</div></div>
+            <div class="c"><div class="v" style="color:#ffd166" id="r-good">0</div><div class="k">GOOD</div></div>
+            <div class="c"><div class="v" style="color:#ff5ea8" id="r-miss">0</div><div class="k">MISS</div></div>
+        </div>
+        <div class="r-btns">
+            <button class="ghost cal" id="r-cal" style="display:none">📡 이 결과로 보정</button>
+            <button class="ghost" id="r-retry">다시</button>
+            <button class="ghost" id="r-menu">메뉴</button>
+        </div>
+    </div>
+</div>
+
+<!-- in-game input offset calibration -->
+<div id="igcal" class="hidden">
+    <div class="igcal-box">
+        <div class="it">🎯 입력 오프셋 보정</div>
+        <div class="id"><b>들리는 '딱' 소리에 맞춰</b> <kbd>Space</kbd>나 아래 버튼을 누르세요.<br>
+            화면이 아니라 <b>소리 기준</b>입니다 — 이어폰 음향 지연을 측정해 박자를 맞춥니다.</div>
+        <div class="igcal-beat" id="igcal-beat"></div>
+        <button class="igcal-pad" id="igcal-pad">박자에 맞춰 탭</button>
+        <div class="igcal-read" id="igcal-read">시작을 누르면 카운트인 후 측정합니다</div>
+        <div class="igcal-btns">
+            <button class="pri" id="igcal-start">▶ 시작</button>
+            <button id="igcal-apply" disabled>적용</button>
+            <button id="igcal-close">닫기</button>
+        </div>
+    </div>
+</div>
+
+<!-- chart + audio embedded as globals so the game runs from file:// (double-click) with no server -->
+<!-- song manifest (charts) loads upfront; each song's audio is lazy-loaded on selection -->
+<script src="assets/songs.js"></script>
+<script>
+"use strict";
+// ════════════════════════════════════════════════════════════
+//  PULSE BLOOM — touch/hold rhythm game, music-driven blooms
+// ════════════════════════════════════════════════════════════
+
+const cv = document.getElementById('cv');
+const g  = cv.getContext('2d');
+let W=0, H=0, DPR=1, R=60; // R = base zone radius (px)
+
+function resize(){
+    DPR = Math.min(window.devicePixelRatio||1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.floor(W*DPR); cv.height = Math.floor(H*DPR);
+    g.setTransform(DPR,0,0,DPR,0,0);
+    R = Math.max(34, Math.min(W,H)*0.066);
+}
+window.addEventListener('resize', resize); resize();
+
+// ── audio ──
+let ctx=null, audioBuffer=null, srcNode=null, analyser=null, freqData=null;
+let musicGain=null, sfxGain=null;
+let audioStart=0; // ctx time at song t=0
+
+// ── player settings (persisted) ──
+let musicVol=0.8, sfxVol=0.7, inputOffset=0;   // inputOffset in ms; + = player presses late
+let hoverMode=false;   // PC: cursor resting on a note auto-hits it (no click)
+(function loadSettings(){ try{
+    const s=JSON.parse(localStorage.getItem('pulsebloom_settings')||'{}');
+    if(typeof s.musicVol==='number') musicVol=s.musicVol;
+    if(typeof s.sfxVol==='number')   sfxVol=s.sfxVol;
+    if(typeof s.inputOffset==='number') inputOffset=s.inputOffset;
+    if(typeof s.hoverMode==='boolean') hoverMode=s.hoverMode;
+}catch(e){} })();
+function saveSettings(){ try{
+    localStorage.setItem('pulsebloom_settings', JSON.stringify({musicVol,sfxVol,inputOffset,hoverMode}));
+}catch(e){} }
+
+// game clock — inputOffset shifts the whole note timeline so a player with audio latency
+// (e.g. bluetooth) can line notes up to what they hear. Audio scheduling is unaffected.
+function songTime(){ return ctx ? ctx.currentTime - audioStart - inputOffset/1000 : -99; }
+
+function b64ToArrayBuffer(b64){
+    const bin = atob(b64);
+    const len = bin.length;
+    const bytes = new Uint8Array(len);
+    for(let i=0;i<len;i++) bytes[i]=bin.charCodeAt(i);
+    return bytes.buffer;
+}
+
+async function loadAll(){
+    ctx = new (window.AudioContext||window.webkitAudioContext)();
+    analyser = ctx.createAnalyser();
+    analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.8;
+    freqData = new Uint8Array(analyser.frequencyBinCount);
+    musicGain = ctx.createGain(); musicGain.gain.value = musicVol;
+    sfxGain   = ctx.createGain(); sfxGain.gain.value   = sfxVol;
+    musicGain.connect(analyser); analyser.connect(ctx.destination);  // song → musicGain → analyser → out
+    sfxGain.connect(ctx.destination);                                // blips → sfxGain → out
+
+    if(!window.SONGS) throw new Error('songs.js 누락');
+    SONGS = window.SONGS;
+    buildSongList();   // song-select is the first screen
+}
+
+// build the song-select list
+function buildSongList(){
+    const el=document.getElementById('song-list'); el.innerHTML='';
+    SONGS.forEach(s=>{
+        const card=document.createElement('div'); card.className='song-card';
+        const diffs=Object.keys(s.charts).map(d=>{
+            const m=DIFF_META[d]||[d.toUpperCase(),'#fff'];
+            return '<span class="dchip" style="color:'+m[1]+'">'+m[0]+' '+s.charts[d].level+'</span>';
+        }).join('') + (s.isTutorial?'<span class="dchip tut">TUTORIAL</span>':'');
+        card.innerHTML='<div class="sc-title">'+s.title+'</div>'
+            + (s.subtitle?'<div class="sc-sub">'+s.subtitle+'</div>':'')
+            + '<div class="sc-meta">'+fmtDur(s.duration)+' · '+s.bpm+' BPM · '+chartNotes(s)+' notes</div>'
+            + '<div class="sc-diffs">'+diffs+'</div>';
+        card.onclick=()=>selectSong(s);
+        el.appendChild(card);
+    });
+}
+function chartNotes(s){ let n=0; for(const d in s.charts) n=Math.max(n, s.charts[d].objects.length); return n; }
+function fmtDur(d){ const m=Math.floor(d/60); return m+':'+String(Math.floor(d%60)).padStart(2,'0'); }
+
+// lazy-load a song's audio (script src works from file://) then decode
+function loadAudio(s){
+    return new Promise((resolve,reject)=>{
+        const decode=()=>{
+            const b64 = window.AUDIO && window.AUDIO[s.id];
+            if(!b64){ reject(new Error('오디오 누락')); return; }
+            ctx.decodeAudioData(b64ToArrayBuffer(b64)).then(buf=>{ audioBuffer=buf; resolve(); }).catch(reject);
+        };
+        if(window.AUDIO && window.AUDIO[s.id]){ decode(); return; }
+        const sc=document.createElement('script');
+        sc.src='assets/'+s.id.replace(/-/g,'')+'_audio.js';
+        sc.onload=decode; sc.onerror=()=>reject(new Error('오디오 스크립트 로드 실패'));
+        document.head.appendChild(sc);
+    });
+}
+
+// pick a song → load its audio → show the setup screen
+async function selectSong(s){
+    SONG=s; audioBuffer=null;
+    document.getElementById('ov-songs').classList.add('hidden');
+    document.getElementById('ov-result').classList.add('hidden');
+    document.getElementById('ov-start').classList.remove('hidden');
+    document.getElementById('song-title').textContent=s.title;
+    document.getElementById('song-sub').innerHTML=(s.subtitle?'<span>'+s.subtitle+'</span>':'')
+        + (s.isTutorial?'<span class="tutorial-badge">TUTORIAL</span>':'');
+    buildDifficultyUI();
+    APPROACH = s.approach || 1.2;
+    const ap=document.getElementById('approach'); ap.value=APPROACH;
+    document.getElementById('approach-val').textContent=APPROACH.toFixed(1)+'초';
+
+    const panel=document.getElementById('panel');
+    panel.style.opacity='.4'; panel.style.pointerEvents='none';
+    document.getElementById('spinner').classList.remove('hidden');
+    const ld=document.getElementById('loading'); ld.classList.remove('hidden'); ld.textContent='음악 불러오는 중…';
+    try{
+        await loadAudio(s);
+        document.getElementById('spinner').classList.add('hidden');
+        ld.classList.add('hidden');
+        panel.style.opacity='1'; panel.style.pointerEvents='auto';
+    }catch(err){ ld.textContent='음악 로드 실패: '+err.message; console.error(err); }
+}
+
+// ── game data ──
+let SONG=null, SONGS=[];
+const COLORS=['#ff5ea8','#5ee0ff','#b07cff','#ffd166','#5effa0'];
+let objects=[];
+let diff='normal';
+let APPROACH=1.2;        // seconds telegraph
+let auto=false;
+const LEAD_EXTRA=1.0;    // countdown seconds before music after spawn lead
+let leadIn=0;
+
+// runtime
+let running=false, raf=0;
+let score=0, combo=0, maxCombo=0;
+let cnt={perfect:0, good:0, miss:0};
+let judgeSum=0, judgeCount=0;
+let hitErrors=[];    // signed timing error (ms) per non-miss hit — for play-based calibration
+let floats=[];       // judgment texts
+let petals=[];       // bloom particles
+let ripples=[];      // hit rings
+let bassPulse=0;
+
+// pointers (multitouch)
+const pointers=new Map();   // id -> {x,y, obj?}
+let autoCursor={x:0,y:0, has:false};
+let cursor={x:0,y:0, on:false};   // real pointer position, for hover mode
+
+const HIT={ perfect:55, good:120, miss:160 }; // ms
+
+let captions=[];
+function buildObjects(){
+    const chart = SONG.charts[diff];
+    const raw = chart.objects;
+    objects = raw.map((o,i)=>({
+        t:o.t, type:o.type, dur:o.dur||0,
+        nx:o.x, ny:o.y, hint:o.hint||null,
+        color:COLORS[i%COLORS.length],
+        state:'wait',          // wait -> approach -> held -> done
+        headJudge:null, holdEnd:0, lastTick:0, spawnShown:false
+    }));
+    captions = chart.captions || [];
+}
+function P(o){ return { x:o.nx*W, y:o.ny*H }; }
+
+// ════════════════ INPUT ════════════════
+function canvasPos(e){
+    const r=cv.getBoundingClientRect();
+    return { x:e.clientX-r.left, y:e.clientY-r.top };
+}
+cv.addEventListener('pointerdown', e=>{
+    if(!running||auto) return;
+    e.preventDefault();
+    const {x,y}=canvasPos(e);
+    onDown(e.pointerId,x,y);
+}, {passive:false});
+cv.addEventListener('pointermove', e=>{
+    if(!running||auto) return;
+    const {x,y}=canvasPos(e);
+    cursor.x=x; cursor.y=y; cursor.on=true;   // for hover mode
+    const p=pointers.get(e.pointerId); if(!p) return;
+    p.x=x; p.y=y;
+}, {passive:false});
+cv.addEventListener('pointerleave', ()=>{ cursor.on=false; });
+function up(e){
+    const p=pointers.get(e.pointerId);
+    if(p && p.obj){ finalizeHold(p.obj, songTime()); }
+    pointers.delete(e.pointerId);
+}
+cv.addEventListener('pointerup', up);
+cv.addEventListener('pointercancel', up);
+
+function onDown(id,x,y){
+    const now=songTime();
+    hitSound();                 // every touch plays the same click (immediate feedback)
+    let best=null,bd=Infinity;
+    for(const o of objects){
+        if(o.state==='done'||o.state==='held') continue;
+        const dt=Math.abs(o.t-now)*1000;
+        if(dt>HIT.miss) continue;
+        const p=P(o), dist=Math.hypot(x-p.x,y-p.y);
+        if(dist>R*1.75) continue;
+        if(dt<bd){ bd=dt; best=o; }
+    }
+    if(!best){ pointers.set(id,{x,y}); return; }
+    const p=P(best);
+    const j = bd<=HIT.perfect?'perfect': bd<=HIT.good?'good':'miss';
+    if(j!=='miss'){ hitErrors.push((now-best.t)*1000); updateTiming(); }   // +late / -early
+    if(best.type==='tap'){
+        best.state='done';
+        applyJudge(j,p,best.color);
+        pointers.set(id,{x,y});
+    } else {
+        best.headJudge=j;
+        applyJudge(j,p,best.color);
+        if(j==='miss'){ best.state='done'; pointers.set(id,{x,y}); }
+        else { best.state='held'; pointers.set(id,{x,y,obj:best}); best.lastTick=now; }
+    }
+}
+
+function finalizeHold(o, endTime){
+    if(o.state!=='held') return;
+    const frac = Math.max(0,Math.min(1,(endTime-o.t)/(o.dur||0.001)));
+    const p=P(o);
+    const tail = frac>=0.85?'perfect': frac>=0.5?'good':'miss';
+    applyTail(tail,p,o.color);
+    o.state='done';
+}
+
+// ════════════════ JUDGE / SCORE ════════════════
+function applyJudge(kind,p,color){
+    judgeCount++;
+    if(kind==='miss'){
+        cnt.miss++; combo=0; judgeSum+=0;
+        addFloat('MISS',p,'#ff5ea8');
+    } else {
+        if(kind==='perfect'){ cnt.perfect++; judgeSum+=1; addFloat('PERFECT',p,'#5ee0ff'); }
+        else { cnt.good++; judgeSum+=0.6; addFloat('GOOD',p,'#ffd166'); }
+        combo++; if(combo>maxCombo) maxCombo=combo;
+        const base = kind==='perfect'?300:150;
+        score += Math.round(base*(1+Math.min(combo,300)*0.003));
+        bloom(p,color, kind==='perfect'?1:0.6);
+        ripples.push({x:p.x,y:p.y,r:R,a:1,color});
+    }
+    syncHUD();
+}
+function applyTail(kind,p,color){
+    judgeCount++;
+    if(kind==='miss'){ cnt.miss++; combo=0; judgeSum+=0; addFloat('LET GO',p,'#ff5ea8'); }
+    else {
+        if(kind==='perfect') judgeSum+=1; else judgeSum+=0.6;
+        combo++; if(combo>maxCombo) maxCombo=combo;
+        score += kind==='perfect'?200:100;
+        bloom(p,color,1.2);
+        ripples.push({x:p.x,y:p.y,r:R*1.4,a:1,color});
+    }
+    syncHUD();
+}
+function syncHUD(){
+    document.getElementById('score').textContent = score.toLocaleString();
+    document.getElementById('combo').textContent = combo>0? combo : '';
+    const acc = judgeCount? (judgeSum/judgeCount*100):100;
+    document.getElementById('acc').textContent = acc.toFixed(2)+'%';
+}
+function median(arr){ if(!arr.length) return 0; const s=[...arr].sort((a,b)=>a-b); return s[Math.floor(s.length/2)]; }
+function updateTiming(){
+    const el=document.getElementById('timing-live');
+    if(auto || hitErrors.length<3){ el.textContent=''; return; }
+    const m=Math.round(median(hitErrors));
+    if(Math.abs(m)<=8){ el.textContent='타이밍 정확'; el.style.color='#5effa0'; }
+    else { el.textContent = m>0 ? '늦음 +'+m+'ms' : '빠름 '+m+'ms'; el.style.color = m>0?'#ff8fd0':'#5ee0ff'; }
+}
+
+// short blip
+function sfx(freq){
+    if(!sfxGain) return;
+    const o=ctx.createOscillator(), gg=ctx.createGain();
+    o.connect(gg); gg.connect(sfxGain);
+    o.type='triangle'; o.frequency.value=freq;
+    gg.gain.setValueAtTime(0.13, ctx.currentTime);
+    gg.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.12);
+    o.start(); o.stop(ctx.currentTime+0.13);
+}
+// one consistent tap click — plays on every touch / hit, through the SFX volume
+function hitSound(){ if(ctx) sfx(800); }
+
+// ════════════════ VISUAL FX ════════════════
+const isDense = ()=> APPROACH < 1.0;   // fast charts (Chaotic+) get lighter, cleaner FX
+function addFloat(txt,p,color){
+    if(isDense() && txt!=='MISS' && txt!=='LET GO') return;   // dense: skip per-note text, keep misses
+    floats.push({txt,x:p.x,y:p.y,color,life:1});
+}
+function bloom(p,color,strength=1){
+    const n = isDense() ? Math.round(5*strength)+3 : Math.round(10*strength)+6;
+    for(let i=0;i<n;i++){
+        const a=Math.random()*Math.PI*2;
+        const sp=(Math.random()*2+1)*(1+strength);
+        petals.push({
+            x:p.x, y:p.y,
+            vx:Math.cos(a)*sp, vy:Math.sin(a)*sp-0.5,
+            r:Math.random()*4+2, color, life:1,
+            decay:0.012+Math.random()*0.02
+        });
+    }
+}
+
+// ════════════════ GAME FLOW ════════════════
+function startGame(){
+    score=0; combo=0; maxCombo=0;
+    cnt={perfect:0,good:0,miss:0}; judgeSum=0; judgeCount=0;
+    floats=[]; petals=[]; ripples=[]; pointers.clear(); hitErrors=[];
+    document.getElementById('timing-live').textContent='';
+    buildObjects(); syncHUD();
+
+    document.getElementById('ov-start').classList.add('hidden');
+    document.getElementById('ov-result').classList.add('hidden');
+    document.getElementById('auto-badge').classList.toggle('on', auto);
+
+    if(ctx.state==='suspended') ctx.resume();
+    // fresh source
+    srcNode = ctx.createBufferSource();
+    srcNode.buffer = audioBuffer;
+    srcNode.connect(musicGain);
+    leadIn = APPROACH + LEAD_EXTRA;
+    audioStart = ctx.currentTime + leadIn;
+    srcNode.start(audioStart);
+
+    running=true;
+    if(raf) cancelAnimationFrame(raf);
+    loop();
+}
+
+function loop(){
+    if(!running) return;
+    const now=songTime();
+    update(now);
+    render(now);
+    if(now > SONG.duration + 1.2 && objects.every(o=>o.state==='done')){
+        endGame(); return;
+    }
+    raf=requestAnimationFrame(loop);
+}
+
+function update(now){
+    // analyser bass pulse
+    if(analyser){
+        analyser.getByteFrequencyData(freqData);
+        let s=0; for(let i=0;i<6;i++) s+=freqData[i];
+        const target=(s/6)/255;
+        bassPulse += (target-bassPulse)*0.25;
+    }
+
+    for(const o of objects){
+        if(o.state==='done') continue;
+        const dt = o.t-now;
+        // spawn (start approach)
+        if(o.state==='wait' && dt<=APPROACH){ o.state='approach'; }
+
+        if(auto){
+            // computer plays perfectly
+            if(o.state==='approach' && now>=o.t){
+                const p=P(o);
+                if(o.type==='tap'){ o.state='done'; applyJudge('perfect',p,o.color); }
+                else { o.headJudge='perfect'; applyJudge('perfect',p,o.color); o.state='held'; o.lastTick=now; }
+                hitSound();      // auto demo clicks on each hit, same sound
+            }
+            if(o.state==='held' && now>=o.t+o.dur){ finalizeHold(o, o.t+o.dur); }
+        } else {
+            // hover mode (PC): cursor resting on a note auto-hits it at the right time, no click
+            if(hoverMode && o.state==='approach' && cursor.on && now >= o.t - HIT.perfect/1000){
+                const p=P(o);
+                if(Math.hypot(cursor.x-p.x, cursor.y-p.y) <= R*1.75){
+                    const bd=Math.abs(now-o.t)*1000;
+                    const j = bd<=HIT.perfect?'perfect': bd<=HIT.good?'good':'miss';
+                    if(j!=='miss'){
+                        hitSound(); hitErrors.push((now-o.t)*1000); updateTiming();
+                        if(o.type==='tap'){ o.state='done'; applyJudge(j,p,o.color); }
+                        else { o.headJudge=j; applyJudge(j,p,o.color); o.state='held'; o.hoverHeld=true; o.lastTick=now; }
+                    }
+                }
+            }
+            // human: auto-miss if window passed without press
+            if((o.state==='approach') && now > o.t + HIT.miss/1000){
+                const p=P(o);
+                o.state= o.type==='tap' ? 'done' : 'done';
+                applyJudge('miss',p,o.color);
+                if(o.type==='hold'){ /* tail also lost */ applyTail('miss',p,o.color); }
+            }
+            // hover-held releases when the cursor leaves the zone
+            if(o.state==='held' && o.hoverHeld){
+                const p=P(o);
+                if(!cursor.on || Math.hypot(cursor.x-p.x, cursor.y-p.y) > R*1.9){ finalizeHold(o, now); }
+            }
+            // hold tick blooms while held
+            if(o.state==='held'){
+                if(now - o.lastTick > 0.09){
+                    o.lastTick=now;
+                    const pr=pointers.get([...pointers].find(([k,v])=>v.obj===o)?.[0]);
+                    const base=P(o);
+                    bloom({x:base.x+(Math.random()*20-10), y:base.y+(Math.random()*20-10)}, o.color, 0.5);
+                    score+=8; syncHUD();
+                }
+                if(now>=o.t+o.dur){ finalizeHold(o, o.t+o.dur); }
+            }
+        }
+    }
+
+    // auto cursor target (visual)
+    if(auto){
+        let target=null,bt=Infinity;
+        for(const o of objects){
+            if(o.state==='done') continue;
+            if(o.t<bt){ bt=o.t; target=o; }
+        }
+        if(target){ const p=P(target);
+            if(!autoCursor.has){ autoCursor.x=p.x; autoCursor.y=p.y; autoCursor.has=true; }
+            autoCursor.x+=(p.x-autoCursor.x)*0.18;
+            autoCursor.y+=(p.y-autoCursor.y)*0.18;
+        }
+    }
+
+    // particles (capped so dropped frames can't clutter the screen)
+    for(const pt of petals){ pt.x+=pt.vx; pt.y+=pt.vy; pt.vy+=0.06; pt.vx*=0.98; pt.life-=pt.decay; }
+    petals=petals.filter(p=>p.life>0);
+    if(petals.length>260) petals.splice(0, petals.length-260);
+    for(const r of ripples){ r.r+=6; r.a-=0.045; }
+    ripples=ripples.filter(r=>r.a>0);
+    if(ripples.length>28) ripples.splice(0, ripples.length-28);
+    for(const f of floats){ f.y-=0.7; f.life-=0.022; }
+    floats=floats.filter(f=>f.life>0);
+}
+
+function render(now){
+    // background
+    g.clearRect(0,0,W,H);
+    const cx=W/2, cy=H/2;
+    const glow=0.10+bassPulse*0.22;
+    const bg=g.createRadialGradient(cx,cy,0,cx,cy,Math.max(W,H)*0.7);
+    bg.addColorStop(0,`rgba(60,25,90,${glow})`);
+    bg.addColorStop(1,'rgba(5,3,10,0)');
+    g.fillStyle=bg; g.fillRect(0,0,W,H);
+
+    // ripples
+    for(const r of ripples){
+        g.beginPath(); g.arc(r.x,r.y,r.r,0,Math.PI*2);
+        g.strokeStyle=hexA(r.color, r.a*0.7); g.lineWidth=2.5; g.stroke();
+    }
+
+    // petals (additive)
+    g.globalCompositeOperation='lighter';
+    for(const pt of petals){
+        g.beginPath(); g.arc(pt.x,pt.y,pt.r*(0.4+pt.life),0,Math.PI*2);
+        g.fillStyle=hexA(pt.color, pt.life*0.8); g.fill();
+    }
+    g.globalCompositeOperation='source-over';
+
+    // objects
+    for(const o of objects){
+        if(o.state==='wait'||o.state==='done') continue;
+        const p=P(o);
+        const dt=o.t-now;            // sec until hit (neg after)
+        const appT=Math.max(0,Math.min(1, dt/APPROACH));
+        drawObject(o,p,appT,now);
+    }
+
+    // pointers / auto cursor
+    if(auto && autoCursor.has){ drawCursor(autoCursor.x,autoCursor.y,'#5ee0ff'); }
+    if(!auto && hoverMode && cursor.on){ drawCursor(cursor.x,cursor.y,'#ffd166'); }
+
+    // floating judgments
+    g.textAlign='center'; g.textBaseline='middle';
+    for(const f of floats){
+        g.font='700 '+Math.round(R*0.42)+'px Segoe UI, sans-serif';
+        g.fillStyle=hexA(f.color, f.life);
+        g.fillText(f.txt, f.x, f.y);
+    }
+
+    // tutorial captions
+    if(captions.length){
+        for(const c of captions){
+            if(now>=c.t0 && now<=c.t1){
+                const edge=Math.min(now-c.t0, c.t1-now);
+                drawCaption(c.text, Math.min(1, edge/0.45));
+                break;
+            }
+        }
+    }
+
+    // countdown
+    if(now<0){
+        const c=Math.ceil(-now);
+        if(c<=3){
+            g.textAlign='center'; g.textBaseline='middle';
+            g.font='800 '+Math.round(Math.min(W,H)*0.3)+'px Segoe UI, sans-serif';
+            g.fillStyle='rgba(255,255,255,'+(0.25+0.4*(-now-(c-1)))+')';
+            g.fillText(c, W/2, H/2);
+        }
+    }
+}
+
+function drawObject(o,p,appT,now){
+    const isHold = o.type==='hold';
+    const col=o.color;
+    // approach ring
+    const ringR = R*(1 + appT*(isDense()?2.2:3.0));
+    g.beginPath(); g.arc(p.x,p.y,ringR,0,Math.PI*2);
+    g.strokeStyle=hexA(col, 0.85*(1-appT*0.3)); g.lineWidth=3; g.stroke();
+
+    // zone body
+    g.beginPath(); g.arc(p.x,p.y,R,0,Math.PI*2);
+    if(isHold){
+        g.strokeStyle=hexA(col,0.95); g.lineWidth=4; g.stroke();
+        // inner glow for hold
+        const ig=g.createRadialGradient(p.x,p.y,0,p.x,p.y,R);
+        ig.addColorStop(0,hexA(col,0.18)); ig.addColorStop(1,hexA(col,0));
+        g.fillStyle=ig; g.fill();
+    } else {
+        const rg=g.createRadialGradient(p.x,p.y,0,p.x,p.y,R);
+        rg.addColorStop(0,hexA(col,0.9)); rg.addColorStop(0.7,hexA(col,0.5)); rg.addColorStop(1,hexA(col,0.05));
+        g.fillStyle=rg; g.fill();
+        g.beginPath(); g.arc(p.x,p.y,R,0,Math.PI*2);
+        g.strokeStyle=hexA('#ffffff',0.5); g.lineWidth=2; g.stroke();
+    }
+
+    // hold progress arc (while held)
+    if(o.state==='held'){
+        const frac=Math.max(0,Math.min(1,(now-o.t)/(o.dur||0.001)));
+        g.beginPath();
+        g.arc(p.x,p.y,R*1.25,-Math.PI/2, -Math.PI/2 + frac*Math.PI*2);
+        g.strokeStyle=hexA('#ffffff',0.9); g.lineWidth=5; g.stroke();
+        // pulsing core
+        g.beginPath(); g.arc(p.x,p.y,R*(0.5+0.15*Math.sin(now*20)),0,Math.PI*2);
+        g.fillStyle=hexA(col,0.5); g.fill();
+    }
+
+    // hold tail length hint (faint) before pressing
+    if(isHold && o.state==='approach'){
+        g.font='600 '+Math.round(R*0.5)+'px Segoe UI'; g.textAlign='center'; g.textBaseline='middle';
+        g.fillStyle=hexA('#ffffff',0.6); g.fillText('HOLD', p.x, p.y);
+    }
+
+    // teaching hint (tutorial) — emphasis ring + label + pointer
+    if(o.hint && (o.state==='approach'||o.state==='held')){
+        const pl=0.5+0.4*Math.sin(now*7);
+        g.beginPath(); g.arc(p.x,p.y,R*(1.55+0.12*Math.sin(now*7)),0,Math.PI*2);
+        g.strokeStyle=hexA('#ffffff',pl); g.lineWidth=2; g.stroke();
+        const ly=p.y - R*1.9;
+        g.font='700 '+Math.round(R*0.42)+'px Segoe UI'; g.textAlign='center'; g.textBaseline='bottom';
+        g.fillStyle='#fff'; g.fillText(o.hint, p.x, ly);
+        g.beginPath(); g.moveTo(p.x,p.y-R*1.5); g.lineTo(p.x-7,p.y-R*1.5-11); g.lineTo(p.x+7,p.y-R*1.5-11);
+        g.closePath(); g.fillStyle=hexA('#ffffff',pl); g.fill();
+    }
+}
+
+function drawCursor(x,y,col){
+    g.beginPath(); g.arc(x,y,10,0,Math.PI*2);
+    g.fillStyle=hexA(col,0.9); g.fill();
+    g.beginPath(); g.arc(x,y,18,0,Math.PI*2);
+    g.strokeStyle=hexA(col,0.5); g.lineWidth=2; g.stroke();
+}
+
+function drawCaption(text, alpha){
+    g.font='600 '+Math.round(Math.min(W,H)*0.032)+'px Segoe UI, sans-serif';
+    g.textAlign='center'; g.textBaseline='middle';
+    const padX=24, w=g.measureText(text).width+padX*2, h=Math.min(W,H)*0.07;
+    const x=W/2, y=H*0.86;
+    g.fillStyle=`rgba(10,6,20,${0.7*alpha})`;
+    roundRect(x-w/2, y-h/2, w, h, h/2); g.fill();
+    g.strokeStyle=hexA('#b07cff', 0.5*alpha); g.lineWidth=1.5;
+    roundRect(x-w/2, y-h/2, w, h, h/2); g.stroke();
+    g.fillStyle=`rgba(255,255,255,${alpha})`;
+    g.fillText(text, x, y);
+}
+function roundRect(x,y,w,h,r){
+    g.beginPath();
+    g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r);
+    g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath();
+}
+
+function hexA(hex,a){
+    if(hex[0]!=='#') return hex;
+    const n=parseInt(hex.slice(1),16);
+    const r=(n>>16)&255,gn=(n>>8)&255,b=n&255;
+    return `rgba(${r},${gn},${b},${Math.max(0,Math.min(1,a))})`;
+}
+
+function endGame(){
+    running=false;
+    if(raf) cancelAnimationFrame(raf);
+    const acc = judgeCount? judgeSum/judgeCount*100 : 0;
+    let grade,color;
+    if(acc>=98){grade='SS';color='#ffd166';}
+    else if(acc>=95){grade='S';color='#5ee0ff';}
+    else if(acc>=90){grade='A';color='#5effa0';}
+    else if(acc>=80){grade='B';color='#b07cff';}
+    else if(acc>=70){grade='C';color='#ff8fd0';}
+    else if(acc>=55){grade='D';color='#ffd166';}
+    else {grade='F';color='#ff5ea8';}
+    document.getElementById('grade').textContent=grade;
+    document.getElementById('grade').style.color=color;
+    document.getElementById('r-score').textContent=score.toLocaleString();
+    document.getElementById('r-acc').textContent=acc.toFixed(2)+'%';
+    document.getElementById('r-combo').textContent=maxCombo;
+    document.getElementById('r-perfect').textContent=cnt.perfect;
+    document.getElementById('r-good').textContent=cnt.good;
+    document.getElementById('r-miss').textContent=cnt.miss;
+
+    // ADOFAI-style: calibrate from your actual play
+    const tl=document.getElementById('r-timing-line'), cb=document.getElementById('r-cal');
+    cb.disabled=false;
+    if(!auto && hitErrors.length>=5){
+        const m=Math.round(median(hitErrors));
+        document.getElementById('r-timing').textContent=(m>0?'+':'')+m+'ms '+(Math.abs(m)<=8?'(정확)':m>0?'(늦게 누름)':'(빨리 누름)');
+        tl.style.display='';
+        if(Math.abs(m)>8){ cb.textContent='📡 이 결과로 보정 ('+(m>0?'+':'')+m+'ms)'; cb.dataset.adj=m; cb.style.display=''; }
+        else cb.style.display='none';
+    } else { tl.style.display='none'; cb.style.display='none'; }
+
+    document.getElementById('ov-result').classList.remove('hidden');
+}
+
+function stopAudio(){ try{ srcNode && srcNode.stop(); }catch(e){} }
+
+// ════════════════ DIFFICULTY LADDER ════════════════
+const DIFF_META={
+    normal:  ['NORMAL',  '#5effa0'],
+    chaotic: ['CHAOTIC', '#ffd166'],
+    end:     ['END',     '#ff5ea8'],
+    torment: ['TORMENT', '#b07cff'],
+    '???':   ['? ? ?',   '#8a7da6']
+};
+function buildDifficultyUI(){
+    const seg=document.getElementById('seg-diff'); seg.innerHTML='';
+    const ladder=SONG.ladder||Object.keys(SONG.charts);
+    let firstAvail=null;
+    ladder.forEach(tier=>{
+        const has=!!SONG.charts[tier];
+        const meta=DIFF_META[tier]||[tier.toUpperCase(),'#ffffff'];
+        const b=document.createElement('button');
+        b.dataset.d=tier;
+        if(has){
+            b.textContent=meta[0];
+            b.style.borderColor=meta[1]; b.style.color=meta[1];
+            if(!firstAvail){ firstAvail=tier; b.classList.add('sel'); b.style.color='#fff'; }
+        } else {
+            b.innerHTML='🔒 '+meta[0]; b.classList.add('locked'); b.disabled=true;
+        }
+        seg.appendChild(b);
+    });
+    diff=firstAvail||ladder[0];
+    updateLevelLabel();
+}
+function updateLevelLabel(){
+    const ch=SONG.charts[diff]; const el=document.getElementById('diff-level');
+    if(ch&&el) el.textContent='· Lv.'+ch.level;
+}
+
+// ════════════════ UI WIRING ════════════════
+document.getElementById('seg-diff').addEventListener('click', e=>{
+    const b=e.target.closest('button'); if(!b||b.disabled||b.classList.contains('locked')) return;
+    document.querySelectorAll('#seg-diff button').forEach(x=>{ x.classList.remove('sel');
+        if(!x.classList.contains('locked')){ const m=DIFF_META[x.dataset.d]; if(m) x.style.color=m[1]; } });
+    b.classList.add('sel'); b.style.color='#fff'; diff=b.dataset.d; updateLevelLabel();
+});
+const apSlider=document.getElementById('approach');
+apSlider.addEventListener('input', ()=>{
+    APPROACH=parseFloat(apSlider.value);
+    document.getElementById('approach-val').textContent=APPROACH.toFixed(1)+'초';
+});
+const autoT=document.getElementById('auto-toggle');
+autoT.addEventListener('click', ()=>{ auto=!auto; autoT.classList.toggle('on',auto); });
+const hoverT=document.getElementById('hover-toggle');
+hoverT.addEventListener('click', ()=>{ hoverMode=!hoverMode; hoverT.classList.toggle('on',hoverMode); saveSettings(); });
+
+// ── settings: music / sfx volume + input offset ──
+const musicSl=document.getElementById('music-vol'), sfxSl=document.getElementById('sfx-vol'),
+      offSl=document.getElementById('ingame-offset');
+function initSettingsUI(){
+    musicSl.value=Math.round(musicVol*100); document.getElementById('music-vol-val').textContent=Math.round(musicVol*100)+'%';
+    sfxSl.value=Math.round(sfxVol*100);     document.getElementById('sfx-vol-val').textContent=Math.round(sfxVol*100)+'%';
+    offSl.value=inputOffset;                document.getElementById('ingame-offset-val').textContent=inputOffset+' ms';
+    hoverT.classList.toggle('on', hoverMode);
+}
+musicSl.addEventListener('input', ()=>{ musicVol=+musicSl.value/100;
+    document.getElementById('music-vol-val').textContent=musicSl.value+'%';
+    if(musicGain) musicGain.gain.value=musicVol; saveSettings(); });
+sfxSl.addEventListener('input', ()=>{ sfxVol=+sfxSl.value/100;
+    document.getElementById('sfx-vol-val').textContent=sfxSl.value+'%';
+    if(sfxGain) sfxGain.gain.value=sfxVol;
+    if(ctx){ if(ctx.state==='suspended') ctx.resume(); sfx(660); } saveSettings(); });   // preview blip
+offSl.addEventListener('input', ()=>{ inputOffset=parseInt(offSl.value);
+    document.getElementById('ingame-offset-val').textContent=inputOffset+' ms'; saveSettings(); });
+initSettingsUI();
+
+// ── in-game offset calibration (metronome tap → measure player latency) ──
+const IGB=0.5, IG_CI=4, IG_M=8;   // 120 BPM, 4 count-in + 8 measured
+let igcal={active:false, start:0, beats:[], measure:[], taps:[], raf:0, last:-1, result:null, timer:0};
+const igEl=document.getElementById('igcal'), igBeat=document.getElementById('igcal-beat'),
+      igPad=document.getElementById('igcal-pad'), igRead=document.getElementById('igcal-read'),
+      igApply=document.getElementById('igcal-apply'), igStartBtn=document.getElementById('igcal-start');
+function calTick(at,freq){ const o=ctx.createOscillator(),gg=ctx.createGain(); o.connect(gg); gg.connect(ctx.destination);
+    o.type='square'; o.frequency.value=freq; gg.gain.setValueAtTime(0.16,at); gg.gain.exponentialRampToValueAtTime(0.0001,at+0.05);
+    o.start(at); o.stop(at+0.06); }
+function igReset(){ igcal.active=false; igcal.taps=[]; igcal.result=null; igcal.beats=[]; igcal.measure=[]; igcal.last=-1;
+    igApply.disabled=true; igRead.textContent='시작을 누르면 카운트인 후 측정합니다'; igBeat.classList.remove('flash','measuring'); igStartBtn.textContent='▶ 시작'; }
+function igStop(){ if(igcal.raf)cancelAnimationFrame(igcal.raf); igcal.raf=0; if(igcal.timer)clearTimeout(igcal.timer); igcal.timer=0; }
+function igOpen(){ if(!ctx) return; igEl.classList.remove('hidden'); igReset(); }
+function igClose(){ igStop(); igcal.active=false; igEl.classList.add('hidden'); }
+function igStart(){ if(!ctx)return; if(ctx.state==='suspended')ctx.resume(); igReset(); igcal.active=true;
+    const total=IG_CI+IG_M; igcal.start=ctx.currentTime+0.8;
+    for(let i=0;i<total;i++){ const bt=igcal.start+i*IGB; igcal.beats.push(bt);
+        const m=i>=IG_CI; if(m)igcal.measure.push(bt); calTick(bt, m?880:520); }
+    igRead.textContent='카운트인… 소리에 맞춰 탭!'; igStartBtn.textContent='측정 중…'; igBeat.classList.add('measuring');
+    const endAt=igcal.start+(total-1)*IGB+0.6; igcal.timer=setTimeout(igFinish, Math.max(50,(endAt-ctx.currentTime)*1000)); }
+function igTap(){ if(!igcal.active)return; igcal.taps.push(ctx.currentTime);
+    igPad.classList.add('hit'); setTimeout(()=>igPad.classList.remove('hit'),80); igRead.textContent='측정 중… 탭 '+igcal.taps.length; }
+function igFinish(){ igStop(); igcal.active=false; igStartBtn.textContent='▶ 다시 측정';
+    const diffs=[]; for(const t of igcal.taps){ let best=1e9; for(const b of igcal.measure){ const d=t-b; if(Math.abs(d)<Math.abs(best))best=d; } if(Math.abs(best)<=0.25)diffs.push(best); }
+    if(diffs.length<3){ igRead.innerHTML='측정 실패 — 탭이 부족합니다. 다시 시도하세요.'; igApply.disabled=true; return; }
+    diffs.sort((a,b)=>a-b); const ms=Math.round(diffs[Math.floor(diffs.length/2)]*1000); igcal.result=ms;
+    igRead.innerHTML='측정: 평균 <b>'+(ms>=0?'+':'')+ms+' ms</b> '+(ms>=0?'늦게':'빨리')+' 누름 ('+diffs.length+'회) → 적용하면 박자가 맞춰집니다'; igApply.disabled=false; }
+function igApplyFn(){ if(igcal.result==null)return; const v=Math.max(-300,Math.min(300,igcal.result));
+    inputOffset=v; offSl.value=v; document.getElementById('ingame-offset-val').textContent=v+' ms'; saveSettings(); igClose(); }
+document.getElementById('ig-cal-open').onclick=igOpen;
+igStartBtn.onclick=igStart; igApply.onclick=igApplyFn; document.getElementById('igcal-close').onclick=igClose; igPad.onclick=igTap;
+window.addEventListener('keydown', e=>{ if(igcal.active && (e.key===' '||e.code==='Space')){ e.preventDefault(); igTap(); } });
+
+document.getElementById('play-btn').addEventListener('click', startGame);
+document.getElementById('r-retry').addEventListener('click', startGame);
+document.getElementById('r-menu').addEventListener('click', ()=>{
+    stopAudio();
+    document.getElementById('ov-result').classList.add('hidden');
+    document.getElementById('ov-start').classList.remove('hidden');
+});
+function toSongSelect(){
+    stopAudio(); running=false;
+    document.getElementById('ov-result').classList.add('hidden');
+    document.getElementById('ov-start').classList.add('hidden');
+    document.getElementById('ov-songs').classList.remove('hidden');
+}
+document.getElementById('back-songs').addEventListener('click', toSongSelect);
+document.getElementById('r-cal').addEventListener('click', e=>{
+    const adj=parseInt(e.currentTarget.dataset.adj||'0');
+    inputOffset=Math.max(-300,Math.min(300, inputOffset+adj));
+    offSl.value=inputOffset; document.getElementById('ingame-offset-val').textContent=inputOffset+' ms';
+    saveSettings();
+    e.currentTarget.textContent='✓ 적용됨 (오프셋 '+inputOffset+'ms) — 다시 플레이해 확인';
+    e.currentTarget.disabled=true;
+});
+
+// keyboard: Esc → setup screen (from game) / song select (from setup)
+window.addEventListener('keydown', e=>{
+    if(e.key!=='Escape') return;
+    if(running){ stopAudio(); running=false;
+        document.getElementById('ov-result').classList.add('hidden');
+        document.getElementById('ov-start').classList.remove('hidden'); }
+    else if(!document.getElementById('ov-start').classList.contains('hidden')){ toSongSelect(); }
+});
+
+loadAll().catch(err=>{
+    const ld=document.getElementById('songs-loading');
+    ld.classList.remove('hidden'); ld.textContent='로드 실패: '+err.message;
+    console.error(err);
+});
+</script>
+</body>
+</html>
