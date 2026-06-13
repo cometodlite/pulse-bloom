@@ -164,6 +164,14 @@ input[type=number]{ width:80px; }
 
             <canvas id="tl"></canvas>
 
+            <div class="row" id="sel-row" style="margin-top:8px; display:none; flex-direction:row; align-items:center; gap:10px; flex-wrap:wrap;">
+                <span class="lbl">선택 노트</span>
+                <span class="val" id="sel-info" style="min-width:170px; text-align:left;">—</span>
+                <button class="ctl" id="nudge-l">◀ −1프레임</button>
+                <button class="ctl" id="nudge-r">+1프레임 ▶</button>
+                <button class="ctl danger" id="sel-del">🗑 삭제</button>
+            </div>
+
             <div class="pads" id="pads"></div>
 
             <div class="row" style="margin-top:14px">
@@ -178,7 +186,8 @@ input[type=number]{ width:80px; }
             <div class="hint">
                 재생 중 <kbd>D</kbd><kbd>F</kbd><kbd>J</kbd><kbd>K</kbd> 를 박자에 맞춰 누르세요.
                 <b>짧게 = 탭</b>, <b>0.18초 이상 꾹 = 홀드</b>. 동시에 여러 키 OK.
-                <br><kbd>Space</kbd> 재생/정지 · <kbd>Backspace</kbd> 마지막 노트 취소
+                <br><kbd>Space</kbd> 재생/정지 · <kbd>Backspace</kbd> 마지막 취소
+                <br>타임라인 노트 <b>클릭</b>해 선택 → <kbd>←</kbd><kbd>→</kbd> 1프레임씩 이동(<kbd>Shift</kbd>=5프레임) · <kbd>Del</kbd>/<kbd>Backspace</kbd> 삭제
             </div>
         </div>
 
@@ -241,6 +250,7 @@ const HOLD_THRESH=0.18;         // sec
 let offsetMs=0;
 
 let notes=[];                   // {t(raw), key, lane, type, dur}
+let selectedNote=null;          // note picked on the timeline for fine editing
 const pressing=new Map();       // key -> {downPos, lane}
 
 // ── audio helpers ──
@@ -297,7 +307,8 @@ function play(){
     ensureCtx();
     srcNode=ctx.createBufferSource();
     srcNode.buffer=buffer; srcNode.playbackRate.value=speed;
-    srcNode.connect(ctx.destination);
+    const mg=ctx.createGain(); mg.gain.value = reviewMode ? 0.5 : 1.0;   // dim music to 50% during review
+    srcNode.connect(mg); mg.connect(ctx.destination);
     const useCountIn=document.getElementById('countin').checked && curPos<0.05 && !reviewMode;
     const lead= useCountIn ? 1.8 : 0;
     audioStartCtx=ctx.currentTime+lead;
@@ -332,8 +343,8 @@ function scheduleReviewTicks(){
         const t=effT(n);
         if(t < curPos-0.01) continue;
         const at=audioStartCtx + (t-playStartPos)/speed;
-        tick(at, n.type==='hold'?660:990, 0.16);
-        if(n.type==='hold'){ const end=audioStartCtx+(t+n.dur-playStartPos)/speed; tick(end, 440, 0.12); }
+        tick(at, n.type==='hold'?660:990, 0.6, 0.05);
+        if(n.type==='hold'){ const end=audioStartCtx+(t+n.dur-playStartPos)/speed; tick(end, 440, 0.45, 0.05); }
     }
 }
 
@@ -466,6 +477,14 @@ window.addEventListener('keydown', e=>{
     if(e.target.tagName==='INPUT') return;
     const k=e.key.toLowerCase();
     if(k===' '||e.code==='Space'){ e.preventDefault(); reviewMode=false; togglePlay(); return; }
+    // editing a selected note (works while paused/stopped)
+    if(selectedNote){
+        if(e.key==='ArrowLeft'){ e.preventDefault(); nudgeSelected(-1, e.shiftKey?5:1); return; }
+        if(e.key==='ArrowRight'){ e.preventDefault(); nudgeSelected(1, e.shiftKey?5:1); return; }
+        if(k==='delete'){ e.preventDefault(); deleteSelected(); return; }
+        if(k==='escape'){ selectedNote=null; updateSelInfo(); drawTL(); return; }
+        if(k==='backspace'){ e.preventDefault(); deleteSelected(); return; }   // selected → delete it
+    }
     if(k==='backspace'){ e.preventDefault(); undo(); return; }
     if(transport!=='playing'||reviewMode) return;
     const lane=KEYS.indexOf(k);
@@ -542,6 +561,8 @@ function drawTL(){
         } else {
             tg.fillStyle=col; tg.fillRect(x-3, y+3, 6, laneH-8);
         }
+        if(n===selectedNote){ tg.strokeStyle='#fff'; tg.lineWidth=2;
+            tg.strokeRect(x-6, y+1, 12, laneH-4); }
     }
     // playhead
     const px=VIEW_BACK/span*TLW;
@@ -562,6 +583,45 @@ function loop(){
     updateSeek(); drawTL();
     requestAnimationFrame(loop);
 }
+
+// ── note editing: click timeline to select, arrows nudge by 1 frame ──
+const FRAME=1/60;   // ~16.7ms
+tl.addEventListener('pointerdown', e=>{
+    if(!buffer) return;
+    const r=tl.getBoundingClientRect();
+    const cx=e.clientX-r.left, cy=e.clientY-r.top;
+    const pos=transport==='playing'?songPos():curPos;
+    const t0=pos-VIEW_BACK, span=VIEW_BACK+VIEW_FWD;
+    const laneH=(TLH-20)/KEYS.length;
+    let best=null, bd=22;   // px
+    for(const n of notes){
+        const t=effT(n); if(t<t0-1||t>t0+span) continue;
+        const nx=(t-t0)/span*TLW, ny=10+n.lane*laneH+laneH/2;
+        const d=Math.hypot(cx-nx, cy-ny);
+        if(d<bd){ bd=d; best=n; }
+    }
+    selectedNote=best; updateSelInfo(); drawTL();
+});
+function updateSelInfo(){
+    const row=document.getElementById('sel-row');
+    if(selectedNote){ row.style.display='flex';
+        document.getElementById('sel-info').textContent='t='+effT(selectedNote).toFixed(3)+'s · '+(selectedNote.key||'').toUpperCase()+' · '+selectedNote.type; }
+    else row.style.display='none';
+}
+function nudgeSelected(dir, mult){
+    if(!selectedNote) return;
+    selectedNote.t=Math.max(0, selectedNote.t + dir*mult*FRAME);
+    notes.sort((a,b)=>a.t-b.t);
+    if(transport!=='playing'){ curPos=Math.max(0,Math.min(duration,effT(selectedNote))); updateSeek(); }
+    updateSelInfo(); drawTL();
+}
+function deleteSelected(){
+    const i=notes.indexOf(selectedNote); if(i>=0) notes.splice(i,1);
+    selectedNote=null; updateStats(); updateSelInfo(); drawTL();
+}
+document.getElementById('nudge-l').onclick=()=>nudgeSelected(-1,1);
+document.getElementById('nudge-r').onclick=()=>nudgeSelected(1,1);
+document.getElementById('sel-del').onclick=deleteSelected;
 
 // ── export / import ──
 document.getElementById('export-btn').onclick=()=>{
