@@ -887,10 +887,9 @@ function onDown(id,x,y){
         const dt=Math.abs(o.t-now)*1000;
         if(dt>HIT.miss) continue;
         const p=P(o);
-        const dist=o.phase==='blooming'
-            ? Math.abs(x-p.x)          // BLOOMING: X proximity only (Y fixed on line)
-            : Math.hypot(x-p.x,y-p.y);
-        if(dist>R*(o.phase==='blooming'?2.2:1.75)) continue;
+        const onLine=o.phase==='blooming'||o.phase==='raining';
+        const dist=onLine ? Math.abs(x-p.x) : Math.hypot(x-p.x,y-p.y);
+        if(dist>R*(onLine?2.2:1.75)) continue;
         if(dt<bd){ bd=dt; best=o; }
     }
     if(!best){ pointers.set(id,{x,y}); return; }
@@ -1077,8 +1076,9 @@ function update(now){
             // hover mode (PC): cursor resting on a note auto-hits it at the right time, no click
             if(hoverMode && o.state==='approach' && cursor.on && now >= o.t - HIT.perfect/1000){
                 const p=P(o);
-                const hd=o.phase==='blooming'?Math.abs(cursor.x-p.x):Math.hypot(cursor.x-p.x,cursor.y-p.y);
-                if(hd <= R*(o.phase==='blooming'?2.2:1.75)){
+                const onLn=o.phase==='blooming'||o.phase==='raining';
+                const hd=onLn?Math.abs(cursor.x-p.x):Math.hypot(cursor.x-p.x,cursor.y-p.y);
+                if(hd <= R*(onLn?2.2:1.75)){
                     const bd=Math.abs(now-o.t)*1000;
                     const j = bd<=HIT.perfect?'perfect': bd<=HIT.good?'good':'miss';
                     if(j!=='miss'){
@@ -1152,8 +1152,8 @@ function drawFollowPoints(now){
     }
     for(let i=0;i<vis.length-1;i++){
         const a=vis[i], b=vis[i+1];
-        // BLOOMING notes sit on the same Y line — connector adds no spatial info
-        if(a.phase==='blooming' && b.phase==='blooming') continue;
+        // BLOOMING/RAINING on same Y line — connector adds no spatial info
+        if((a.phase==='blooming'||a.phase==='raining') && (b.phase==='blooming'||b.phase==='raining')) continue;
         const pa=P(a), pb=P(b);
         const dtA=a.t-now;
         const prog=1-Math.max(0,dtA/APPROACH);
@@ -1197,10 +1197,24 @@ function render(now){
     const hasJLine=objects.some(o=>o.phase!=='crowning'&&o.state!=='wait'&&o.state!=='done');
     if(hasJLine){
         g.save();
+        // RAINING: brighten line segment under arriving notes
+        for(const o of objects){
+            if(o.phase!=='raining'||o.state==='wait'||o.state==='done') continue;
+            const dt=o.t-now;
+            const appT=Math.max(0,Math.min(1,dt/APPROACH));
+            const proximity=1-appT; // 0=far, 1=at line
+            if(proximity<0.55) continue;
+            const ga=(proximity-0.55)/0.45;
+            const rg=g.createRadialGradient(o.nx*W,jy,0,o.nx*W,jy,R*3);
+            rg.addColorStop(0,hexA(o.color,0.35*ga));
+            rg.addColorStop(1,hexA(o.color,0));
+            g.globalCompositeOperation='lighter';
+            g.fillStyle=rg; g.fillRect(o.nx*W-R*3,jy-R*1.5,R*6,R*3);
+            g.globalCompositeOperation='source-over';
+        }
         g.strokeStyle='rgba(255,255,255,0.10)';
         g.lineWidth=1.5;
         g.beginPath(); g.moveTo(0,jy); g.lineTo(W,jy); g.stroke();
-        // subtle glow under line
         const lg=g.createLinearGradient(0,jy-14,0,jy+14);
         lg.addColorStop(0,'rgba(180,120,255,0)');
         lg.addColorStop(0.5,'rgba(180,120,255,0.07)');
@@ -1227,9 +1241,12 @@ function render(now){
     // objects
     for(const o of objects){
         if(o.state==='wait'||o.state==='done') continue;
-        const p=P(o);
-        const dt=o.t-now;            // sec until hit (neg after)
+        const dt=o.t-now;
         const appT=Math.max(0,Math.min(1, dt/APPROACH));
+        // RAINING: visual Y falls from 0 → JLINE; hit detection (P) stays at JLINE
+        const p=o.phase==='raining'
+            ? {x:o.nx*W, y:H*JLINE*(1-Math.max(0,appT))}
+            : P(o);
         drawObject(o,p,appT,now);
     }
 
@@ -1270,6 +1287,7 @@ function render(now){
 
 function drawObject(o,p,appT,now){
     if(o.phase==='blooming'){ drawBloomingNote(o,p,appT,now); return; }
+    if(o.phase==='raining'){  drawRainingNote(o,p,appT,now);  return; }
     // CROWNING (original OSU!-style)
     const isHold=o.type==='hold', col=o.color;
     const ringR=R*(1+appT*(isDense()?2.2:3.0));
@@ -1367,6 +1385,60 @@ function drawBloomingNote(o,p,appT,now){
         const ly=p.y-bR*2.0;
         g.font='700 '+Math.round(R*0.42)+'px Segoe UI'; g.textAlign='center'; g.textBaseline='bottom';
         g.fillStyle=hexA('#fff',a); g.fillText(o.hint, p.x, ly);
+    }
+}
+
+function drawRainingNote(o,p,appT,now){
+    const col=o.color, isHold=o.type==='hold';
+    const jy=H*JLINE;
+    const dt=o.t-now;
+    const missFrac=dt<0?Math.min(1,Math.abs(dt)/(HIT.miss/1000)):0;
+    const a=1-missFrac*0.55;
+
+    // trailing water-drop tail (above the note, fading upward)
+    if(p.y>4 && appT>0.02){
+        const tailLen=Math.min(R*3, p.y*0.35);
+        g.save();
+        const tg=g.createLinearGradient(p.x,p.y-tailLen,p.x,p.y);
+        tg.addColorStop(0,hexA(col,0));
+        tg.addColorStop(1,hexA(col,0.32*a));
+        g.strokeStyle=tg; g.lineWidth=3;
+        g.beginPath(); g.moveTo(p.x,p.y-tailLen); g.lineTo(p.x,p.y);
+        g.stroke(); g.restore();
+    }
+
+    // note body — fixed size R while falling
+    if(!isHold){
+        const rg=g.createRadialGradient(p.x,p.y,0,p.x,p.y,R);
+        rg.addColorStop(0,hexA(col,0.9*a)); rg.addColorStop(0.65,hexA(col,0.45*a)); rg.addColorStop(1,hexA(col,0.04));
+        g.fillStyle=rg; g.beginPath(); g.arc(p.x,p.y,R,0,Math.PI*2); g.fill();
+        g.beginPath(); g.arc(p.x,p.y,R,0,Math.PI*2);
+        g.strokeStyle=hexA('#ffffff',0.45*a); g.lineWidth=1.8; g.stroke();
+    } else {
+        g.beginPath(); g.arc(p.x,p.y,R,0,Math.PI*2);
+        g.strokeStyle=hexA(col,0.92*a); g.lineWidth=3.5; g.stroke();
+        const ig=g.createRadialGradient(p.x,p.y,0,p.x,p.y,R);
+        ig.addColorStop(0,hexA(col,0.18*a)); ig.addColorStop(1,hexA(col,0));
+        g.fillStyle=ig; g.beginPath(); g.arc(p.x,p.y,R,0,Math.PI*2); g.fill();
+    }
+
+    // hold: progress arc at judgment line while held
+    if(o.state==='held'){
+        const frac=Math.max(0,Math.min(1,(now-o.t)/(o.dur||0.001)));
+        g.beginPath(); g.arc(p.x,jy,R*1.22,-Math.PI/2,-Math.PI/2+frac*Math.PI*2);
+        g.strokeStyle=hexA('#ffffff',0.88); g.lineWidth=5; g.stroke();
+        g.beginPath(); g.arc(p.x,jy,R*(0.48+0.14*Math.sin(now*20)),0,Math.PI*2);
+        g.fillStyle=hexA(col,0.5); g.fill();
+    }
+    if(isHold && o.state==='approach'){
+        g.font='600 '+Math.round(R*0.5)+'px Segoe UI'; g.textAlign='center'; g.textBaseline='middle';
+        g.fillStyle=hexA('#ffffff',0.6*a); g.fillText('HOLD', p.x, p.y);
+    }
+    if(o.hint && (o.state==='approach'||o.state==='held')){
+        const pl=0.5+0.4*Math.sin(now*7);
+        const ly=p.y-R*2.0;
+        g.font='700 '+Math.round(R*0.42)+'px Segoe UI'; g.textAlign='center'; g.textBaseline='bottom';
+        g.fillStyle=hexA('#fff',a*pl); g.fillText(o.hint, p.x, ly);
     }
 }
 
