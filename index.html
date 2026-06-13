@@ -119,6 +119,35 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
     padding:12px 26px; border-radius:14px; cursor:pointer; font-family:inherit; font-size:.92rem; }
 .hidden { display:none !important; }
 
+/* title screen */
+#ov-title { cursor:pointer; }
+.title-start {
+    margin-top:56px; font-size:.92rem; letter-spacing:.26em; color:#5b4f72;
+    text-transform:uppercase; animation: tpulse 2.2s ease-in-out infinite;
+}
+@keyframes tpulse { 0%,100%{opacity:.4} 50%{opacity:1} }
+.title-glow {
+    position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(ellipse 60% 40% at 50% 46%, rgba(176,124,255,.07) 0%, transparent 70%);
+}
+
+/* settings screen */
+#ov-settings { overflow-y:auto; }
+#ov-settings .panel { margin-top:20px; }
+
+/* settings button (top-right) */
+.settings-btn {
+    position:absolute; top:20px; right:22px;
+    padding:8px 14px; border-radius:20px; cursor:pointer;
+    border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.05);
+    color:#9a8fb5; font-family:inherit; font-size:.82rem; letter-spacing:.04em;
+}
+.settings-btn:hover { border-color:#b07cff; color:#fff; }
+
+/* coming-soon diff chip */
+.seg.diff button.coming-soon { opacity:.55; cursor:default;
+    border-color:rgba(255,209,102,.3) !important; color:#7a6e4a !important; font-style:italic; }
+
 .song-sub { margin-top:6px; display:flex; gap:10px; align-items:center; justify-content:center;
     color:#8a7da6; font-size:.8rem; letter-spacing:.1em; }
 .tutorial-badge { font-size:.62rem; letter-spacing:.18em; color:#5ee0ff;
@@ -202,21 +231,29 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
         </div>
     </div>
 
+    <!-- TITLE SCREEN -->
+    <div class="overlay" id="ov-title">
+        <div class="title-glow"></div>
+        <div class="title">PULSE BLOOM</div>
+        <div class="tagline">치는 게임이 아니라, 피우는 게임</div>
+        <div class="title-start">탭하여 시작</div>
+    </div>
+
     <!-- SONG SELECT -->
-    <div class="overlay" id="ov-songs">
-        <div class="title" style="font-size:clamp(2rem,7vw,3.4rem)">PULSE&nbsp;BLOOM</div>
-        <div class="tagline">곡을 선택하세요</div>
+    <div class="overlay hidden" id="ov-songs">
+        <button class="back-btn" id="back-title">← 타이틀</button>
+        <button class="settings-btn" id="btn-settings-songs">⚙ 설정</button>
+        <div class="title" style="font-size:clamp(1.6rem,5vw,2.4rem)">곡 선택</div>
         <div class="song-list" id="song-list"></div>
-        <div class="spinner hidden" id="songs-spinner"></div>
-        <div id="songs-loading" class="hidden">불러오는 중…</div>
+        <div id="songs-loading" class="hidden"></div>
     </div>
 
     <!-- START / SETUP -->
     <div class="overlay hidden" id="ov-start">
         <button class="back-btn" id="back-songs">← 곡 선택</button>
+        <button class="settings-btn" id="btn-settings-start">⚙ 설정</button>
         <div class="song" id="song-title">— LOADING —</div>
         <div class="song-sub" id="song-sub"></div>
-        <div class="tagline">치는 게임이 아니라, 피우는 게임</div>
 
         <div class="panel" id="panel" style="opacity:.4;pointer-events:none">
             <div class="row">
@@ -237,6 +274,25 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
                 </div>
                 <div class="switch"></div>
             </div>
+            <button class="play-btn" id="play-btn">▶ 시작</button>
+        </div>
+
+        <div class="spinner" id="spinner"></div>
+        <div id="loading">음악과 채보를 불러오는 중…</div>
+
+        <div class="howto">
+            화면에 <b>원</b>이 나타나고 바깥 링이 줄어듭니다.<br>
+            링이 원에 딱 맞을 때 <b>그 자리를 누르세요</b>.<br>
+            <b>속이 빈 원</b>은 누른 채로 <b>꾹 홀드</b> — 잘 누를수록 꽃이 핍니다.<br>
+            <span style="color:#6f6388">PC: 마우스 · 모바일: 터치(멀티터치 지원)</span>
+        </div>
+    </div>
+
+    <!-- SETTINGS SCREEN -->
+    <div class="overlay hidden" id="ov-settings">
+        <button class="back-btn" id="back-settings">← 뒤로</button>
+        <div class="title" style="font-size:clamp(1.6rem,5vw,2.4rem)">설정</div>
+        <div class="panel">
             <div class="toggle" id="hover-toggle">
                 <div>
                     <div class="t-lbl">호버 모드 (PC)</div>
@@ -266,17 +322,6 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
                     <button class="mini-btn" id="ig-cal-open">🎯 보정</button>
                 </div>
             </div>
-            <button class="play-btn" id="play-btn">▶ 시작</button>
-        </div>
-
-        <div class="spinner" id="spinner"></div>
-        <div id="loading">음악과 채보를 불러오는 중…</div>
-
-        <div class="howto">
-            화면에 <b>원</b>이 나타나고 바깥 링이 줄어듭니다.<br>
-            링이 원에 딱 맞을 때 <b>그 자리를 누르세요</b>.<br>
-            <b>속이 빈 원</b>은 누른 채로 <b>꾹 홀드</b> — 잘 누를수록 꽃이 핍니다.<br>
-            <span style="color:#6f6388">PC: 마우스 · 모바일: 터치(멀티터치 지원)</span>
         </div>
     </div>
 
@@ -373,19 +418,21 @@ function b64ToArrayBuffer(b64){
     return bytes.buffer;
 }
 
-async function loadAll(){
+function initSongs(){
+    if(!window.SONGS) throw new Error('songs.js 누락');
+    SONGS = window.SONGS;
+}
+
+function initAudio(){
+    if(ctx) return;
     ctx = new (window.AudioContext||window.webkitAudioContext)();
     analyser = ctx.createAnalyser();
     analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.8;
     freqData = new Uint8Array(analyser.frequencyBinCount);
     musicGain = ctx.createGain(); musicGain.gain.value = musicVol;
     sfxGain   = ctx.createGain(); sfxGain.gain.value   = sfxVol;
-    musicGain.connect(analyser); analyser.connect(ctx.destination);  // song → musicGain → analyser → out
-    sfxGain.connect(ctx.destination);                                // blips → sfxGain → out
-
-    if(!window.SONGS) throw new Error('songs.js 누락');
-    SONGS = window.SONGS;
-    buildSongList();   // song-select is the first screen
+    musicGain.connect(analyser); analyser.connect(ctx.destination);
+    sfxGain.connect(ctx.destination);
 }
 
 // build the song-select list
@@ -393,10 +440,16 @@ function buildSongList(){
     const el=document.getElementById('song-list'); el.innerHTML='';
     SONGS.forEach(s=>{
         const card=document.createElement('div'); card.className='song-card';
+        const soon=s.comingSoon||[];
         const diffs=Object.keys(s.charts).map(d=>{
             const m=DIFF_META[d]||[d.toUpperCase(),'#fff'];
             return '<span class="dchip" style="color:'+m[1]+'">'+m[0]+' '+s.charts[d].level+'</span>';
-        }).join('') + (s.isTutorial?'<span class="dchip tut">TUTORIAL</span>':'');
+        }).join('')
+        + soon.map(d=>{
+            const m=DIFF_META[d]||[d.toUpperCase(),'#888'];
+            return '<span class="dchip" style="color:#555;text-decoration:line-through">'+m[0]+'</span>';
+        }).join('')
+        + (s.isTutorial?'<span class="dchip tut">TUTORIAL</span>':'');
         card.innerHTML='<div class="sc-title">'+s.title+'</div>'
             + (s.subtitle?'<div class="sc-sub">'+s.subtitle+'</div>':'')
             + '<div class="sc-meta">'+fmtDur(s.duration)+' · '+s.bpm+' BPM · '+chartNotes(s)+' notes</div>'
@@ -424,8 +477,62 @@ function loadAudio(s){
     });
 }
 
+// ── preview ──
+const PREVIEW_STARTS = { 'miss-master': 46, 'want-you': 125, 'cut-your-string': 53 };
+const PREVIEW_DUR = 30, PREVIEW_FADE = 0.5;
+let previewActive = false, previewSrc = null, previewSong = null;
+let previewFadeGain = null, previewFilter = null;
+
+function initPreviewGraph(){
+    if(previewFilter) return;
+    previewFadeGain = ctx.createGain();
+    previewFadeGain.gain.value = 0;
+    previewFilter = ctx.createBiquadFilter();
+    previewFilter.type = 'lowpass';
+    previewFilter.frequency.value = 700;
+    previewFilter.Q.value = 6;
+    previewFadeGain.connect(previewFilter);
+    previewFilter.connect(musicGain);
+}
+
+function schedulePreviewChunk(){
+    if(!previewActive || !audioBuffer || !ctx) return;
+    const startSec = PREVIEW_STARTS[previewSong.id] ?? 0;
+    initPreviewGraph();
+    const src = ctx.createBufferSource();
+    src.buffer = audioBuffer;
+    src.connect(previewFadeGain);
+    const now = ctx.currentTime;
+    previewFadeGain.gain.cancelScheduledValues(now);
+    previewFadeGain.gain.setValueAtTime(0, now);
+    previewFadeGain.gain.linearRampToValueAtTime(1, now + PREVIEW_FADE);
+    previewFadeGain.gain.setValueAtTime(1, now + PREVIEW_DUR - PREVIEW_FADE);
+    previewFadeGain.gain.linearRampToValueAtTime(0, now + PREVIEW_DUR);
+    src.start(now, startSec, PREVIEW_DUR);
+    src.onended = ()=>{ src.disconnect(); if(previewActive) schedulePreviewChunk(); };
+    previewSrc = src;
+}
+
+function startPreview(song){
+    if(!ctx || !audioBuffer) return;
+    previewSong = song;
+    previewActive = true;
+    schedulePreviewChunk();
+}
+
+function stopPreview(){
+    previewActive = false;
+    if(previewSrc){ try{ previewSrc.stop(); }catch(e){} previewSrc = null; }
+    if(previewFadeGain && ctx){
+        const now = ctx.currentTime;
+        previewFadeGain.gain.cancelScheduledValues(now);
+        previewFadeGain.gain.setValueAtTime(0, now);
+    }
+}
+
 // pick a song → load its audio → show the setup screen
 async function selectSong(s){
+    stopPreview();
     SONG=s; audioBuffer=null;
     document.getElementById('ov-songs').classList.add('hidden');
     document.getElementById('ov-result').classList.add('hidden');
@@ -445,6 +552,7 @@ async function selectSong(s){
         document.getElementById('spinner').classList.add('hidden');
         ld.classList.add('hidden');
         panel.style.opacity='1'; panel.style.pointerEvents='auto';
+        startPreview(s);
     }catch(err){ ld.textContent='음악 로드 실패: '+err.message; console.error(err); }
 }
 
@@ -467,6 +575,7 @@ let hitErrors=[];    // signed timing error (ms) per non-miss hit — for play-b
 let floats=[];       // judgment texts
 let petals=[];       // bloom particles
 let ripples=[];      // hit rings
+let nextGlows=[];    // C: next-note hint flash
 let bassPulse=0;
 
 // pointers (multitouch)
@@ -537,12 +646,13 @@ function onDown(id,x,y){
     if(best.type==='tap'){
         best.state='done';
         applyJudge(j,p,best.color);
+        if(j!=='miss') addNextGlow(best);
         pointers.set(id,{x,y});
     } else {
         best.headJudge=j;
         applyJudge(j,p,best.color);
         if(j==='miss'){ best.state='done'; pointers.set(id,{x,y}); }
-        else { best.state='held'; pointers.set(id,{x,y,obj:best}); best.lastTick=now; }
+        else { best.state='held'; pointers.set(id,{x,y,obj:best}); best.lastTick=now; addNextGlow(best); }
     }
 }
 
@@ -553,6 +663,18 @@ function finalizeHold(o, endTime){
     const tail = frac>=0.85?'perfect': frac>=0.5?'good':'miss';
     applyTail(tail,p,o.color);
     o.state='done';
+}
+
+// C: flash the next upcoming note's position to guide the eye
+function addNextGlow(hitObj){
+    const idx=objects.indexOf(hitObj);
+    for(let i=idx+1;i<objects.length;i++){
+        const o=objects[i];
+        if(o.state==='done') continue;
+        const p=P(o);
+        nextGlows.push({x:p.x, y:p.y, color:o.color, life:1.0});
+        break;
+    }
 }
 
 // ════════════════ JUDGE / SCORE ════════════════
@@ -634,9 +756,10 @@ function bloom(p,color,strength=1){
 
 // ════════════════ GAME FLOW ════════════════
 function startGame(){
+    stopPreview();
     score=0; combo=0; maxCombo=0;
     cnt={perfect:0,good:0,miss:0}; judgeSum=0; judgeCount=0;
-    floats=[]; petals=[]; ripples=[]; pointers.clear(); hitErrors=[];
+    floats=[]; petals=[]; ripples=[]; nextGlows=[]; pointers.clear(); hitErrors=[];
     document.getElementById('timing-live').textContent='';
     buildObjects(); syncHUD();
 
@@ -688,8 +811,8 @@ function update(now){
             // computer plays perfectly
             if(o.state==='approach' && now>=o.t){
                 const p=P(o);
-                if(o.type==='tap'){ o.state='done'; applyJudge('perfect',p,o.color); }
-                else { o.headJudge='perfect'; applyJudge('perfect',p,o.color); o.state='held'; o.lastTick=now; }
+                if(o.type==='tap'){ o.state='done'; applyJudge('perfect',p,o.color); addNextGlow(o); }
+                else { o.headJudge='perfect'; applyJudge('perfect',p,o.color); o.state='held'; o.lastTick=now; addNextGlow(o); }
                 hitSound();      // auto demo clicks on each hit, same sound
             }
             if(o.state==='held' && now>=o.t+o.dur){ finalizeHold(o, o.t+o.dur); }
@@ -702,8 +825,8 @@ function update(now){
                     const j = bd<=HIT.perfect?'perfect': bd<=HIT.good?'good':'miss';
                     if(j!=='miss'){
                         hitSound(); hitErrors.push((now-o.t)*1000); updateTiming();
-                        if(o.type==='tap'){ o.state='done'; applyJudge(j,p,o.color); }
-                        else { o.headJudge=j; applyJudge(j,p,o.color); o.state='held'; o.hoverHeld=true; o.lastTick=now; }
+                        if(o.type==='tap'){ o.state='done'; applyJudge(j,p,o.color); addNextGlow(o); }
+                        else { o.headJudge=j; applyJudge(j,p,o.color); o.state='held'; o.hoverHeld=true; o.lastTick=now; addNextGlow(o); }
                     }
                 }
             }
@@ -756,6 +879,33 @@ function update(now){
     if(ripples.length>28) ripples.splice(0, ripples.length-28);
     for(const f of floats){ f.y-=0.7; f.life-=0.022; }
     floats=floats.filter(f=>f.life>0);
+    for(const ng of nextGlows){ ng.life-=0.035; }
+    nextGlows=nextGlows.filter(ng=>ng.life>0);
+}
+
+// A: dashed follow-point lines between consecutive approaching notes
+function drawFollowPoints(now){
+    const vis=[];
+    for(const o of objects){
+        if(o.state==='done'||o.state==='wait') continue;
+        const dt=o.t-now;
+        if(dt < -HIT.miss/1000) continue;
+        vis.push(o);
+    }
+    for(let i=0;i<vis.length-1;i++){
+        const a=vis[i], b=vis[i+1];
+        const pa=P(a), pb=P(b);
+        const dtA=a.t-now;
+        const prog=1-Math.max(0,dtA/APPROACH);
+        const fade=prog>0.75 ? (1-prog)/0.25 : 1;
+        const alpha=0.18*fade;
+        if(alpha<=0.01) continue;
+        g.save();
+        g.beginPath(); g.moveTo(pa.x,pa.y); g.lineTo(pb.x,pb.y);
+        g.setLineDash([4,9]); g.lineDashOffset=-prog*13;
+        g.strokeStyle=`rgba(255,255,255,${alpha})`; g.lineWidth=1.5;
+        g.stroke(); g.restore();
+    }
 }
 
 function render(now){
@@ -779,6 +929,21 @@ function render(now){
     for(const pt of petals){
         g.beginPath(); g.arc(pt.x,pt.y,pt.r*(0.4+pt.life),0,Math.PI*2);
         g.fillStyle=hexA(pt.color, pt.life*0.8); g.fill();
+    }
+    g.globalCompositeOperation='source-over';
+
+    // A: follow-point connectors
+    drawFollowPoints(now);
+
+    // C: next-note hint glows (additive, behind notes)
+    g.globalCompositeOperation='lighter';
+    for(const ng of nextGlows){
+        const r=R*(1.2+(1-ng.life)*1.6);
+        const grad=g.createRadialGradient(ng.x,ng.y,0,ng.x,ng.y,r);
+        grad.addColorStop(0, hexA(ng.color, ng.life*0.45));
+        grad.addColorStop(0.5, hexA(ng.color, ng.life*0.12));
+        grad.addColorStop(1, hexA(ng.color,0));
+        g.fillStyle=grad; g.beginPath(); g.arc(ng.x,ng.y,r,0,Math.PI*2); g.fill();
     }
     g.globalCompositeOperation='source-over';
 
@@ -960,13 +1125,17 @@ const DIFF_META={
 function buildDifficultyUI(){
     const seg=document.getElementById('seg-diff'); seg.innerHTML='';
     const ladder=SONG.ladder||Object.keys(SONG.charts);
+    const soon=SONG.comingSoon||[];
     let firstAvail=null;
     ladder.forEach(tier=>{
         const has=!!SONG.charts[tier];
+        const isSoon=soon.includes(tier);
         const meta=DIFF_META[tier]||[tier.toUpperCase(),'#ffffff'];
         const b=document.createElement('button');
         b.dataset.d=tier;
-        if(has){
+        if(isSoon){
+            b.innerHTML='⏳ '+meta[0]; b.classList.add('coming-soon'); b.disabled=true;
+        } else if(has){
             b.textContent=meta[0];
             b.style.borderColor=meta[1]; b.style.color=meta[1];
             if(!firstAvail){ firstAvail=tier; b.classList.add('sel'); b.style.color='#fff'; }
@@ -1067,12 +1236,37 @@ document.getElementById('r-menu').addEventListener('click', ()=>{
     document.getElementById('ov-start').classList.remove('hidden');
 });
 function toSongSelect(){
-    stopAudio(); running=false;
-    document.getElementById('ov-result').classList.add('hidden');
-    document.getElementById('ov-start').classList.add('hidden');
+    stopAudio(); stopPreview(); running=false;
+    ['ov-result','ov-start','ov-settings','ov-title'].forEach(id=>document.getElementById(id).classList.add('hidden'));
     document.getElementById('ov-songs').classList.remove('hidden');
 }
 document.getElementById('back-songs').addEventListener('click', toSongSelect);
+
+// title screen
+document.getElementById('ov-title').addEventListener('click', ()=>{
+    initAudio();
+    buildSongList();
+    document.getElementById('ov-title').classList.add('hidden');
+    document.getElementById('ov-songs').classList.remove('hidden');
+});
+document.getElementById('back-title').addEventListener('click', ()=>{
+    document.getElementById('ov-songs').classList.add('hidden');
+    document.getElementById('ov-title').classList.remove('hidden');
+});
+
+// settings navigation
+let settingsOrigin='songs';
+function openSettings(from){
+    settingsOrigin=from;
+    document.getElementById('ov-'+from).classList.add('hidden');
+    document.getElementById('ov-settings').classList.remove('hidden');
+}
+document.getElementById('btn-settings-songs').addEventListener('click', ()=>openSettings('songs'));
+document.getElementById('btn-settings-start').addEventListener('click', ()=>openSettings('start'));
+document.getElementById('back-settings').addEventListener('click', ()=>{
+    document.getElementById('ov-settings').classList.add('hidden');
+    document.getElementById('ov-'+settingsOrigin).classList.remove('hidden');
+});
 document.getElementById('r-cal').addEventListener('click', e=>{
     const adj=parseInt(e.currentTarget.dataset.adj||'0');
     inputOffset=Math.max(-300,Math.min(300, inputOffset+adj));
@@ -1082,20 +1276,28 @@ document.getElementById('r-cal').addEventListener('click', e=>{
     e.currentTarget.disabled=true;
 });
 
-// keyboard: Esc → setup screen (from game) / song select (from setup)
+// keyboard: Esc → navigate back through screens
 window.addEventListener('keydown', e=>{
     if(e.key!=='Escape') return;
     if(running){ stopAudio(); running=false;
         document.getElementById('ov-result').classList.add('hidden');
         document.getElementById('ov-start').classList.remove('hidden'); }
+    else if(!document.getElementById('ov-settings').classList.contains('hidden')){
+        document.getElementById('ov-settings').classList.add('hidden');
+        document.getElementById('ov-'+settingsOrigin).classList.remove('hidden');
+    }
     else if(!document.getElementById('ov-start').classList.contains('hidden')){ toSongSelect(); }
+    else if(!document.getElementById('ov-songs').classList.contains('hidden')){
+        document.getElementById('ov-songs').classList.add('hidden');
+        document.getElementById('ov-title').classList.remove('hidden');
+    }
 });
 
-loadAll().catch(err=>{
+try{ initSongs(); }catch(err){
     const ld=document.getElementById('songs-loading');
     ld.classList.remove('hidden'); ld.textContent='로드 실패: '+err.message;
     console.error(err);
-});
+}
 </script>
 </body>
 </html>
