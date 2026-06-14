@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>PULSE BLOOM</title>
 <style>
-* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent;
+    -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
 html,body { height:100%; overflow:hidden; }
 body {
     background:#05030a;
     color:#fff;
     font-family:'Segoe UI','Helvetica Neue',sans-serif;
-    user-select:none;
     touch-action:none;
 }
 #stage { position:fixed; inset:0; }
@@ -802,8 +802,8 @@ const JLINE=0.82;        // judgment line Y ratio (BLOOMING / RAINING)
 const BLOOM_ZONES=[0.12, 0.30, 0.50, 0.70, 0.88];
 const BLOOM_DROP=0.22;
 function snapToZone(x){ return BLOOM_ZONES.reduce((b,z)=>Math.abs(x-z)<Math.abs(x-b)?z:b); }
-// GAME_MODE: 'pulsebloom' = active mode; 'classic' = BLOOMING/RAINING/CROWNING (disabled)
-const GAME_MODE='pulsebloom';
+// orientation helpers — checked each frame since W/H update on resize
+function isLandscape(){ return W > H; }
 let objects=[];
 let diff='normal';
 let APPROACH=1.2;        // seconds telegraph
@@ -855,11 +855,11 @@ function buildObjects(){
     });
     captions = chart.captions || [];
 }
+const JLINE_LAND=0.85; // judgment Y in landscape (2.5D)
+const VP_Y=0.18;       // vanishing point Y in landscape
 function P(o){
-    if(GAME_MODE==='pulsebloom') return {x:o.nx*W, y:o.ny*H};
-    if(o.phase==='blooming') return {x:o.zx*W, y:H*JLINE};
-    if(o.phase==='raining')  return {x:o.nx*W, y:H*JLINE};
-    return {x:o.nx*W, y:o.ny*H};
+    if(isLandscape()) return {x:o.nx*W, y:H*JLINE_LAND};
+    return {x:o.nx*W, y:H*JLINE};
 }
 
 // ════════════════ INPUT ════════════════
@@ -898,7 +898,7 @@ function onDown(id,x,y){
         const dt=Math.abs(o.t-now)*1000;
         if(dt>HIT.miss) continue;
         const p=P(o);
-        const onLine=GAME_MODE!=='pulsebloom'&&(o.phase==='blooming'||o.phase==='raining');
+        const onLine=!isLandscape();
         const dist=onLine ? Math.abs(x-p.x) : Math.hypot(x-p.x,y-p.y);
         if(dist>R*(onLine?2.2:1.75)) continue;
         if(dt<bd){ bd=dt; best=o; }
@@ -1087,7 +1087,7 @@ function update(now){
             // hover mode (PC): cursor resting on a note auto-hits it at the right time, no click
             if(hoverMode && o.state==='approach' && cursor.on && now >= o.t - HIT.perfect/1000){
                 const p=P(o);
-                const onLn=GAME_MODE!=='pulsebloom'&&(o.phase==='blooming'||o.phase==='raining');
+                const onLn=!isLandscape();
                 const hd=onLn?Math.abs(cursor.x-p.x):Math.hypot(cursor.x-p.x,cursor.y-p.y);
                 if(hd <= R*(onLn?2.2:1.75)){
                     const bd=Math.abs(now-o.t)*1000;
@@ -1163,8 +1163,8 @@ function drawFollowPoints(now){
     }
     for(let i=0;i<vis.length-1;i++){
         const a=vis[i], b=vis[i+1];
-        // BLOOMING/RAINING on same Y line — connector adds no spatial info
-        if((a.phase==='blooming'||a.phase==='raining') && (b.phase==='blooming'||b.phase==='raining')) continue;
+        // portrait: notes share judgment line Y — connector adds no spatial info
+        if(!isLandscape()) continue;
         const pa=P(a), pb=P(b);
         const dtA=a.t-now;
         const prog=1-Math.max(0,dtA/APPROACH);
@@ -1331,79 +1331,69 @@ function render(now){
     }
     g.globalCompositeOperation='source-over';
 
-    // judgment line (BLOOMING / RAINING phases)
-    const jy=H*JLINE;
-    const hasJLine=GAME_MODE!=='pulsebloom'&&objects.some(o=>o.phase!=='crowning'&&o.state!=='wait'&&o.state!=='done');
-    if(hasJLine){
+    const hasActive=objects.some(o=>o.state!=='wait'&&o.state!=='done');
+    if(hasActive){
         g.save();
-        // RAINING: brighten line segment under arriving notes
-        for(const o of objects){
-            if(o.phase!=='raining'||o.state==='wait'||o.state==='done') continue;
-            const dt=o.t-now;
-            const appT=Math.max(0,Math.min(1,dt/APPROACH));
-            const proximity=1-appT; // 0=far, 1=at line
-            if(proximity<0.55) continue;
-            const ga=(proximity-0.55)/0.45;
-            const rg=g.createRadialGradient(o.nx*W,jy,0,o.nx*W,jy,R*3);
-            rg.addColorStop(0,hexA(o.color,0.35*ga));
-            rg.addColorStop(1,hexA(o.color,0));
-            g.globalCompositeOperation='lighter';
-            g.fillStyle=rg; g.fillRect(o.nx*W-R*3,jy-R*1.5,R*6,R*3);
-            g.globalCompositeOperation='source-over';
-        }
-        g.strokeStyle='rgba(255,255,255,0.10)';
-        g.lineWidth=1.5;
-        g.beginPath(); g.moveTo(0,jy); g.lineTo(W,jy); g.stroke();
-        const lg=g.createLinearGradient(0,jy-14,0,jy+14);
-        lg.addColorStop(0,'rgba(180,120,255,0)');
-        lg.addColorStop(0.5,'rgba(180,120,255,0.07)');
-        lg.addColorStop(1,'rgba(180,120,255,0)');
-        g.fillStyle=lg; g.fillRect(0,jy-14,W,28);
-
-        // BLOOMING lane guides (5 short vertical lanes above judgment line)
-        const hasBloom=GAME_MODE!=='pulsebloom'&&objects.some(o=>o.phase==='blooming'&&o.state==='approach');
-        if(hasBloom){
-            const laneTop=jy-H*BLOOM_DROP;
-            for(const zx of BLOOM_ZONES){
-                const zxPx=zx*W;
-                let glow=0;
-                for(const o of objects){
-                    if(o.phase!=='blooming'||o.state!=='approach'||o.zx!==zx) continue;
-                    const dt=o.t-now;
-                    const prox=1-Math.max(0,Math.min(1,dt/APPROACH));
-                    if(prox>glow) glow=prox;
-                }
-                g.save();
-                // lane column background
-                const lw=R*2.2;
-                const lg2=g.createLinearGradient(zxPx-lw,0,zxPx+lw,0);
-                lg2.addColorStop(0,hexA('#ffffff',0));
-                lg2.addColorStop(0.5,hexA('#ffffff',0.03+glow*0.06));
-                lg2.addColorStop(1,hexA('#ffffff',0));
-                g.fillStyle=lg2; g.fillRect(zxPx-lw,laneTop,lw*2,jy-laneTop);
-                // tick mark at judgment line
-                const tickA=0.20+glow*0.55;
-                g.strokeStyle=`rgba(255,255,255,${tickA})`;
-                g.lineWidth=2;
-                g.beginPath(); g.moveTo(zxPx,jy-10); g.lineTo(zxPx,jy+10); g.stroke();
-                // glow pool at base when note is close
-                if(glow>0.55){
-                    const tr=g.createRadialGradient(zxPx,jy,0,zxPx,jy,R*2);
-                    tr.addColorStop(0,`rgba(255,255,255,${0.18*(glow-0.55)/0.45})`);
-                    tr.addColorStop(1,'rgba(255,255,255,0)');
-                    g.fillStyle=tr; g.fillRect(zxPx-R*2,jy-R*2,R*4,R*4);
-                }
-                g.restore();
+        if(isLandscape()){
+            // 2.5D perspective field: VP trapezoid + bottom judgment line
+            const vpx=W/2, vpy=H*VP_Y, jyL=H*JLINE_LAND;
+            g.strokeStyle='rgba(255,255,255,0.07)'; g.lineWidth=1.5;
+            g.beginPath(); g.moveTo(vpx,vpy); g.lineTo(0,jyL); g.stroke();
+            g.beginPath(); g.moveTo(vpx,vpy); g.lineTo(W,jyL); g.stroke();
+            // horizon fade at VP
+            const hg=g.createRadialGradient(vpx,vpy,0,vpx,vpy,H*0.18);
+            hg.addColorStop(0,'rgba(180,120,255,0.08)'); hg.addColorStop(1,'rgba(180,120,255,0)');
+            g.fillStyle=hg; g.fillRect(0,0,W,H*0.36);
+            // judgment line at bottom
+            g.strokeStyle='rgba(255,255,255,0.12)'; g.lineWidth=1.5;
+            g.beginPath(); g.moveTo(0,jyL); g.lineTo(W,jyL); g.stroke();
+            const jlg=g.createLinearGradient(0,jyL-14,0,jyL+14);
+            jlg.addColorStop(0,'rgba(180,120,255,0)');
+            jlg.addColorStop(0.5,'rgba(180,120,255,0.09)');
+            jlg.addColorStop(1,'rgba(180,120,255,0)');
+            g.fillStyle=jlg; g.fillRect(0,jyL-14,W,28);
+            // note glow pools at judgment line as they arrive
+            for(const o of objects){
+                if(o.state==='wait'||o.state==='done') continue;
+                const dt=o.t-now;
+                const prox=1-Math.max(0,Math.min(1,dt/APPROACH));
+                if(prox<0.6) continue;
+                const ga=(prox-0.6)/0.4;
+                const rg=g.createRadialGradient(o.nx*W,jyL,0,o.nx*W,jyL,R*3);
+                rg.addColorStop(0,hexA(o.color,0.35*ga));
+                rg.addColorStop(1,hexA(o.color,0));
+                g.globalCompositeOperation='lighter';
+                g.fillStyle=rg; g.fillRect(o.nx*W-R*3,jyL-R*1.5,R*6,R*3);
+                g.globalCompositeOperation='source-over';
             }
+        } else {
+            // portrait: flat RAINING judgment line
+            const jy=H*JLINE;
+            for(const o of objects){
+                if(o.state==='wait'||o.state==='done') continue;
+                const dt=o.t-now;
+                const prox=1-Math.max(0,Math.min(1,dt/APPROACH));
+                if(prox<0.55) continue;
+                const ga=(prox-0.55)/0.45;
+                const rg=g.createRadialGradient(o.nx*W,jy,0,o.nx*W,jy,R*3);
+                rg.addColorStop(0,hexA(o.color,0.35*ga));
+                rg.addColorStop(1,hexA(o.color,0));
+                g.globalCompositeOperation='lighter';
+                g.fillStyle=rg; g.fillRect(o.nx*W-R*3,jy-R*1.5,R*6,R*3);
+                g.globalCompositeOperation='source-over';
+            }
+            g.strokeStyle='rgba(255,255,255,0.10)'; g.lineWidth=1.5;
+            g.beginPath(); g.moveTo(0,jy); g.lineTo(W,jy); g.stroke();
+            const lg=g.createLinearGradient(0,jy-14,0,jy+14);
+            lg.addColorStop(0,'rgba(180,120,255,0)');
+            lg.addColorStop(0.5,'rgba(180,120,255,0.07)');
+            lg.addColorStop(1,'rgba(180,120,255,0)');
+            g.fillStyle=lg; g.fillRect(0,jy-14,W,28);
         }
         g.restore();
     }
 
-    if(GAME_MODE!=='pulsebloom') drawFollowPoints(now);
-    if(GAME_MODE!=='pulsebloom') drawCrowningArrows(now);
-
-    // PULSEBLOOM: radial waves from center
-    if(GAME_MODE==='pulsebloom') drawWaves(now);
+    drawFollowPoints(now);
 
     // C: next-note hint glows (additive, behind notes)
     g.globalCompositeOperation='lighter';
@@ -1422,10 +1412,11 @@ function render(now){
         if(o.state==='wait'||o.state==='done') continue;
         const dt=o.t-now;
         const appT=Math.max(0,Math.min(1, dt/APPROACH));
-        const p = GAME_MODE==='pulsebloom' ? P(o)
-            : o.phase==='raining' ? {x:o.nx*W, y:H*JLINE*(1-Math.max(0,appT))}
-            : o.phase==='blooming' ? {x:o.zx*W, y:H*JLINE-H*BLOOM_DROP*Math.max(0,appT)}
-            : P(o);
+        const ap=Math.max(0,appT);
+        const p = isLandscape()
+            ? (()=>{ const ease=Math.pow(1-ap,0.75);
+                return {x:W/2+(o.nx*W-W/2)*ease, y:H*VP_Y+(H*JLINE_LAND-H*VP_Y)*ease}; })()
+            : {x:o.nx*W, y:H*JLINE*(1-ap)};
         drawObject(o,p,appT,now);
     }
 
@@ -1464,11 +1455,65 @@ function render(now){
     }
 }
 
+function draw2_5DNote(o,p,appT,now){
+    const col=o.color, isHold=o.type==='hold';
+    const scale=Math.pow(1-Math.max(0,appT), 0.75); // perspective scale: 0=far, 1=near
+    const nr=R*scale;
+    if(nr<1) return;
+    const dt=o.t-now;
+    const missFrac=dt<0?Math.min(1,Math.abs(dt)/(HIT.miss/1000)):0;
+    const a=(1-missFrac*0.55);
+    const jyL=H*JLINE_LAND;
+
+    // perspective trail (from current position toward VP)
+    if(scale<0.92 && scale>0.05){
+        const tailLen=nr*2.2;
+        const dx=W/2-p.x, dy=H*VP_Y-p.y;
+        const d=Math.hypot(dx,dy)||1;
+        const tx=p.x+dx/d*tailLen, ty=p.y+dy/d*tailLen;
+        g.save();
+        const tg=g.createLinearGradient(tx,ty,p.x,p.y);
+        tg.addColorStop(0,hexA(col,0)); tg.addColorStop(1,hexA(col,0.25*a));
+        g.strokeStyle=tg; g.lineWidth=nr*1.2;
+        g.lineCap='round';
+        g.beginPath(); g.moveTo(tx,ty); g.lineTo(p.x,p.y); g.stroke();
+        g.restore();
+    }
+
+    // note body with perspective size
+    if(!isHold){
+        const rg=g.createRadialGradient(p.x,p.y,0,p.x,p.y,nr);
+        rg.addColorStop(0,hexA(col,0.9*a)); rg.addColorStop(0.65,hexA(col,0.45*a)); rg.addColorStop(1,hexA(col,0.04));
+        g.fillStyle=rg; g.beginPath(); g.arc(p.x,p.y,nr,0,Math.PI*2); g.fill();
+        g.beginPath(); g.arc(p.x,p.y,nr,0,Math.PI*2);
+        g.strokeStyle=hexA('#ffffff',0.45*a); g.lineWidth=1.8; g.stroke();
+    } else {
+        g.beginPath(); g.arc(p.x,p.y,nr,0,Math.PI*2);
+        g.strokeStyle=hexA(col,0.92*a); g.lineWidth=Math.max(1,3.5*scale); g.stroke();
+        const ig=g.createRadialGradient(p.x,p.y,0,p.x,p.y,nr);
+        ig.addColorStop(0,hexA(col,0.18*a)); ig.addColorStop(1,hexA(col,0));
+        g.fillStyle=ig; g.beginPath(); g.arc(p.x,p.y,nr,0,Math.PI*2); g.fill();
+    }
+    if(o.state==='held'){
+        const frac=Math.max(0,Math.min(1,(now-o.t)/(o.dur||0.001)));
+        g.beginPath(); g.arc(o.nx*W,jyL,R*1.22,-Math.PI/2,-Math.PI/2+frac*Math.PI*2);
+        g.strokeStyle=hexA('#ffffff',0.88); g.lineWidth=5; g.stroke();
+        g.beginPath(); g.arc(o.nx*W,jyL,R*(0.48+0.14*Math.sin(now*20)),0,Math.PI*2);
+        g.fillStyle=hexA(col,0.5); g.fill();
+    }
+    if(isHold && o.state==='approach' && scale>0.5){
+        g.font='600 '+Math.round(nr*0.9)+'px Segoe UI'; g.textAlign='center'; g.textBaseline='middle';
+        g.fillStyle=hexA('#ffffff',0.6*a); g.fillText('HOLD', p.x, p.y);
+    }
+    if(o.hint && (o.state==='approach'||o.state==='held') && scale>0.4){
+        g.font='700 '+Math.round(nr*0.7)+'px Segoe UI'; g.textAlign='center'; g.textBaseline='bottom';
+        g.fillStyle=hexA('#fff',a*0.85); g.fillText(o.hint, p.x, p.y-nr*1.3);
+    }
+}
+
 function drawObject(o,p,appT,now){
-    if(GAME_MODE==='pulsebloom'){ drawPulseBloomNote(o,p,appT,now); return; }
-    if(o.phase==='blooming'){ drawBloomingNote(o,p,appT,now); return; }
-    if(o.phase==='raining'){  drawRainingNote(o,p,appT,now);  return; }
-    drawCrowningNote(o,p,appT,now);
+    if(isLandscape()){ draw2_5DNote(o,p,appT,now); return; }
+    drawRainingNote(o,p,appT,now);
 }
 
 function drawCrowningNote(o,p,appT,now){
@@ -1905,6 +1950,9 @@ window.addEventListener('keydown', e=>{
 window.addEventListener('popstate', ()=>{
     if(running && !paused){ pauseGame(); history.pushState({game:true}, ''); }
 });
+
+// prevent long-press context menu (Android paste popup, iOS callout)
+document.addEventListener('contextmenu', e => e.preventDefault());
 
 // ════════════════ DEV UTILITIES ════════════════
 window.PBDEV = {
