@@ -499,6 +499,7 @@ function initSongs(){
 function initAudio(){
     if(ctx) return;
     ctx = new (window.AudioContext||window.webkitAudioContext)();
+    ctx.resume(); // unlock immediately — called from a trusted user gesture
     analyser = ctx.createAnalyser();
     analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.8;
     freqData = new Uint8Array(analyser.frequencyBinCount);
@@ -752,6 +753,7 @@ function schedulePreviewChunk(){
 
 function startPreview(song){
     if(!ctx || !audioBuffer) return;
+    if(ctx.state==='suspended') ctx.resume();
     previewSong = song;
     previewActive = true;
     schedulePreviewChunk();
