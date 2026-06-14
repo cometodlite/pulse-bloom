@@ -278,6 +278,43 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
 
 #hidden-badge { color:#ff8fd0; border:1px solid rgba(255,143,208,.5); }
 #speed-badge  { color:#ffa07a; border:1px solid rgba(255,160,122,.5); }
+#replay-badge { color:#b07cff; border:1px solid rgba(176,124,255,.5); }
+/* combo pop */
+@keyframes comboPop { 0%{transform:scale(1)} 35%{transform:scale(1.26)} 100%{transform:scale(1)} }
+.combo-pop { animation:comboPop .18s ease-out forwards; }
+/* achievement toast */
+#achievement-toast {
+    position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(16px);
+    background:rgba(14,8,28,.94); border:1px solid rgba(176,124,255,.4);
+    border-radius:14px; padding:13px 24px; font-size:.9rem; color:#e8e2f5;
+    z-index:9999; pointer-events:none; opacity:0;
+    transition:opacity .28s, transform .28s; white-space:nowrap; backdrop-filter:blur(8px);
+    text-align:center; max-width:90vw;
+}
+#achievement-toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+/* achievements overlay */
+.ach-grid { display:flex; flex-direction:column; gap:9px; margin-top:8px; max-height:64vh; overflow-y:auto; width:100%; max-width:480px; }
+.ach-item { display:flex; align-items:center; gap:13px;
+    background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:12px 15px; text-align:left; }
+.ach-item.done { border-color:rgba(94,255,160,.25); background:rgba(94,255,160,.04); }
+.ach-item.locked { opacity:.32; }
+.ach-icon { font-size:1.4rem; min-width:30px; text-align:center; }
+.ach-info { flex:1; }
+.ach-name { font-weight:700; font-size:.86rem; margin-bottom:1px; }
+.ach-desc { font-size:.72rem; color:#8a7da6; }
+.ach-check { color:#5effa0; font-size:1rem; font-weight:800; }
+#ach-counter { font-size:.8rem; color:#8a7da6; margin-bottom:4px; }
+/* PB badge on song cards */
+.sc-pb { font-size:.74rem; margin-top:4px; color:#6f6388; }
+.sc-pb b { color:#9a8fb5; font-weight:600; }
+/* achievements button */
+#btn-achievements { right:80px; }
+/* daily challenge card */
+.song-card.daily { border-color:rgba(255,209,102,.35); background:rgba(255,209,102,.04); }
+.daily-done { opacity:.65; }
+.daily-done .sc-title::after { content:' ✓'; color:#5effa0; font-size:.8em; }
+/* practice mode */
+#practice-row { display:none; }
 </style>
 </head>
 <body>
@@ -295,6 +332,7 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
             <div class="mod-badge" id="mirror-badge">🪞 MIRROR</div>
             <div class="mod-badge" id="hidden-badge">👻 HIDDEN</div>
             <div class="mod-badge" id="speed-badge">⚡ 1.25×</div>
+            <div class="mod-badge" id="replay-badge">▶ REPLAY</div>
         </div>
         <div class="right">
             <div id="combo">0</div>
@@ -312,8 +350,20 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
     </div>
 
     <!-- SONG SELECT -->
+    <!-- Achievement unlock toast -->
+    <div id="achievement-toast">🏆</div>
+
+    <!-- Achievements overlay -->
+    <div class="overlay hidden" id="ov-achievements">
+        <button class="back-btn" id="back-achievements">← 뒤로</button>
+        <div class="title" style="font-size:clamp(1.6rem,5vw,2.4rem)">업적</div>
+        <div id="ach-counter"></div>
+        <div class="ach-grid" id="achievement-list"></div>
+    </div>
+
     <div class="overlay hidden" id="ov-songs">
         <button class="back-btn" id="back-title">← 타이틀</button>
+        <button class="settings-btn" id="btn-achievements">🏆</button>
         <button class="settings-btn" id="btn-settings-songs">⚙ 설정</button>
         <div class="title" style="font-size:clamp(1.6rem,5vw,2.4rem)">곡 선택</div>
         <div class="song-list" id="song-list"></div>
@@ -338,6 +388,20 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
                 <div class="slider-row">
                     <input type="range" id="approach" min="0.4" max="3.0" step="0.1" value="1.2">
                     <span class="sval" id="approach-val">1.2초</span>
+                </div>
+            </div>
+            <div class="toggle" id="practice-toggle">
+                <div>
+                    <div class="t-lbl">연습 모드</div>
+                    <div class="t-sub">지정한 위치부터 시작</div>
+                </div>
+                <div class="switch"></div>
+            </div>
+            <div class="row" id="practice-row">
+                <span class="lbl">시작 위치</span>
+                <div class="slider-row">
+                    <input type="range" id="practice-start" min="0" max="300" step="1" value="0">
+                    <span class="sval" id="practice-start-val">0:00</span>
                 </div>
             </div>
             <button class="play-btn" id="play-btn">▶ 시작</button>
@@ -447,6 +511,13 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
                     <button class="mini-btn" id="ig-cal-open">🎯 보정</button>
                 </div>
             </div>
+            <div class="row">
+                <span class="lbl">블룸 크기 <span class="lbl-sub">노트 타일 크기를 조절합니다</span></span>
+                <div class="slider-row">
+                    <input type="range" id="note-scale" min="60" max="150" step="5" value="100">
+                    <span class="sval" id="note-scale-val">100%</span>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -455,6 +526,9 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
     <!-- RESULT -->
     <div class="overlay hidden" id="ov-result">
         <div class="title" style="font-size:clamp(1.8rem,6vw,2.6rem)">RESULT</div>
+        <div id="r-song-info" style="font-size:clamp(0.85rem,2.4vw,1.05rem);color:rgba(255,255,255,0.65);margin-bottom:4px;letter-spacing:0.04em">
+            <span id="r-song-name"></span> <span id="r-diff-name" style="margin-left:8px;font-weight:700"></span>
+        </div>
         <div id="grade">A</div>
         <div id="r-fc-badge" class="hidden"></div>
         <div class="r-line">SCORE <b id="r-score">0</b></div>
@@ -471,6 +545,7 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
         </div>
         <div class="r-btns">
             <button class="ghost cal" id="r-cal" style="display:none">📡 이 결과로 보정</button>
+            <button class="ghost" id="r-replay" style="display:none">▶ 리플레이</button>
             <button class="ghost" id="r-retry">다시</button>
             <button class="ghost" id="r-menu">메뉴</button>
         </div>
@@ -514,13 +589,14 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
 const cv = document.getElementById('cv');
 const g  = cv.getContext('2d');
 let W=0, H=0, DPR=1, R=60; // R = base zone radius (px)
+let noteScale=1.0;
 
 function resize(){
     DPR = Math.min(window.devicePixelRatio||1, 2);
     W = window.innerWidth; H = window.innerHeight;
     cv.width = Math.floor(W*DPR); cv.height = Math.floor(H*DPR);
     g.setTransform(DPR,0,0,DPR,0,0);
-    R = Math.max(34, Math.min(W,H)*0.066);
+    R = Math.max(34, Math.min(W,H)*0.066) * noteScale;
 }
 window.addEventListener('resize', resize); resize();
 
@@ -538,23 +614,31 @@ let hoverMode=false;   // PC: cursor resting on a note auto-hits it (no click)
     if(typeof s.sfxVol==='number')   sfxVol=s.sfxVol;
     if(typeof s.inputOffset==='number') inputOffset=s.inputOffset;
     if(typeof s.hoverMode==='boolean') hoverMode=s.hoverMode;
+    if(typeof s.noteScale==='number') noteScale=s.noteScale;
 }catch(e){} })();
 function saveSettings(){ try{
-    localStorage.setItem('pulsebloom_settings', JSON.stringify({musicVol,sfxVol,inputOffset,hoverMode}));
+    localStorage.setItem('pulsebloom_settings', JSON.stringify({musicVol,sfxVol,inputOffset,hoverMode,noteScale}));
 }catch(e){} }
 
 // ── bloom progress ──
 const BLOOM_MAX   = 1000;
 const BLOOM_FIRST  = {normal:10, chaotic:20, end:30, torment:40, '???':50};
 const BLOOM_REPEAT = {normal:3,  chaotic:5,  end:10, torment:15, '???':20};
-let progress = {clears:{}, bloom:0, pbs:{}};
+let progress = {clears:{}, bloom:0, pbs:{}, dailies:{}, achievements:{}};
+// ── daily / practice / replay / test ──
+let dailyMode=false, dailyChallenge=null;
+let practiceMode=false, practiceStartSec=0;
+let replayMode=false, replayLog=[], replayPlayLog=[], replayIdx=0;
+let testMode=false;
 
 function loadProgress(){ try{
     const p=JSON.parse(localStorage.getItem('pulsebloom_progress')||'{}');
     if(p&&typeof p==='object'){
-        progress.clears = p.clears||{};
-        progress.bloom  = +p.bloom||0;
-        progress.pbs    = p.pbs||{};
+        progress.clears       = p.clears||{};
+        progress.bloom        = +p.bloom||0;
+        progress.pbs          = p.pbs||{};
+        progress.dailies      = p.dailies||{};
+        progress.achievements = p.achievements||{};
     }
 }catch(e){} }
 
@@ -599,6 +683,131 @@ function b64ToArrayBuffer(b64){
     return bytes.buffer;
 }
 
+// ── achievements ──
+const ACHIEVEMENTS = [
+    {id:'first_clear',  icon:'🌱', name:'첫 발걸음',     desc:'처음으로 곡을 클리어하세요',                bloom:5,  cond:c=>c.cleared},
+    {id:'fc',           icon:'🔥', name:'풀 콤보',       desc:'FULL COMBO를 달성하세요',                  bloom:15, cond:c=>c.cleared&&c.isFC},
+    {id:'ap',           icon:'💎', name:'올 퍼펙트',     desc:'ALL PERFECT를 달성하세요',                 bloom:30, cond:c=>c.cleared&&c.isAP},
+    {id:'combo_100',    icon:'⚡', name:'100 콤보',      desc:'한 곡에서 콤보 100을 달성하세요',           bloom:8,  cond:c=>c.cleared&&c.maxCombo>=100},
+    {id:'combo_300',    icon:'🌟', name:'300 콤보',      desc:'한 곡에서 콤보 300을 달성하세요',           bloom:15, cond:c=>c.cleared&&c.maxCombo>=300},
+    {id:'score_1m',     icon:'👑', name:'백만 점',       desc:'1,000,000점을 달성하세요',                  bloom:25, cond:c=>c.cleared&&c.score>=1000000},
+    {id:'all_normal',   icon:'🌿', name:'노말 마스터',   desc:'모든 곡의 NORMAL을 클리어하세요',           bloom:20, cond:()=>_allDiff('normal')},
+    {id:'all_clear',    icon:'🌸', name:'풀 클리어',     desc:'모든 곡의 모든 난이도를 클리어하세요',      bloom:50, cond:()=>_allDiffs()},
+    {id:'mirror_clear', icon:'🪞', name:'거울 세계',     desc:'미러 모드로 클리어하세요',                  bloom:10, cond:c=>c.cleared&&c.mirrorMode},
+    {id:'hidden_clear', icon:'👻', name:'그림자 속에서', desc:'히든 모드로 클리어하세요',                  bloom:10, cond:c=>c.cleared&&c.hiddenMode},
+    {id:'speed_clear',  icon:'🏎', name:'스피드 런',     desc:'1.25× 속도로 클리어하세요',                bloom:12, cond:c=>c.cleared&&c.speedMod>=1.25},
+    {id:'slow_clear',   icon:'🐢', name:'슬로우 모션',   desc:'0.75× 속도로 클리어하세요',                bloom:8,  cond:c=>c.cleared&&c.speedMod<=0.75},
+    {id:'daily',        icon:'🗓', name:'일일 도전자',   desc:'데일리 챌린지를 완료하세요',               bloom:10, cond:c=>c.dailyCompleted},
+    {id:'bloom_500',    icon:'🌺', name:'꽃밭',          desc:'Bloom 500을 모으세요',                     bloom:20, cond:()=>progress.bloom>=500},
+    {id:'bloom_max',    icon:'✨', name:'만개',           desc:'Bloom을 가득 채우세요 (1000)',             bloom:0,  cond:()=>progress.bloom>=BLOOM_MAX},
+    {id:'practice',     icon:'🎯', name:'연습의 힘',     desc:'연습 모드로 클리어하세요',                  bloom:5,  cond:c=>c.cleared&&c.practiceMode},
+    {id:'replay_watch', icon:'▶', name:'다시 보기',      desc:'리플레이를 시청하세요',                    bloom:5,  cond:c=>c.replayWatched},
+];
+function _allDiff(d){
+    const pool=SONGS.filter(s=>!s.isTutorial&&!s.id.startsWith('__')&&s.charts[d]&&!(s.comingSoon||[]).includes(d));
+    return pool.length>0 && pool.every(s=>(progress.clears[s.id+'|'+d]||0)>0);
+}
+function _allDiffs(){
+    const pool=SONGS.filter(s=>!s.isTutorial&&!s.id.startsWith('__'));
+    return pool.length>0 && pool.every(s=>
+        Object.keys(s.charts).filter(d=>!(s.comingSoon||[]).includes(d))
+            .every(d=>(progress.clears[s.id+'|'+d]||0)>0)
+    );
+}
+
+let _toastQ=[], _toastBusy=false;
+function checkAchievements(ctx){
+    const ul=progress.achievements||{};
+    const newIds=[];
+    for(const a of ACHIEVEMENTS){
+        if(ul[a.id]) continue;
+        try{ if(a.cond(ctx)){ ul[a.id]={ts:Date.now()}; newIds.push(a.id); } }catch(e){}
+    }
+    if(!newIds.length) return;
+    progress.achievements=ul;
+    let bonusBloom=0;
+    for(const id of newIds){ const a=ACHIEVEMENTS.find(x=>x.id===id); if(a&&a.bloom) bonusBloom+=a.bloom; }
+    if(bonusBloom){ progress.bloom=Math.min(BLOOM_MAX,progress.bloom+bonusBloom); }
+    saveProgress();
+    _toastQ.push(...newIds);
+    if(!_toastBusy) _drainToast();
+}
+function _drainToast(){
+    if(!_toastQ.length){ _toastBusy=false; return; }
+    _toastBusy=true;
+    const id=_toastQ.shift();
+    const a=ACHIEVEMENTS.find(x=>x.id===id); if(!a){ _drainToast(); return; }
+    const el=document.getElementById('achievement-toast');
+    el.innerHTML='🏆 <b>업적 달성</b> — '+a.icon+' '+a.name+(a.bloom>0?' <span style="color:#b07cff">+'+a.bloom+' Bloom</span>':'');
+    el.classList.add('show');
+    setTimeout(()=>{ el.classList.remove('show'); setTimeout(_drainToast,350); },2800);
+}
+function buildAchievements(){
+    const ul=progress.achievements||{};
+    const done=ACHIEVEMENTS.filter(a=>ul[a.id]).length;
+    document.getElementById('ach-counter').textContent=done+' / '+ACHIEVEMENTS.length+' 달성';
+    const el=document.getElementById('achievement-list'); el.innerHTML='';
+    for(const a of ACHIEVEMENTS){
+        const isDone=!!ul[a.id];
+        const div=document.createElement('div');
+        div.className='ach-item'+(isDone?' done':' locked');
+        div.innerHTML='<div class="ach-icon">'+a.icon+'</div>'
+            +'<div class="ach-info"><div class="ach-name">'+a.name+'</div>'
+            +'<div class="ach-desc">'+a.desc+(a.bloom>0?' · +'+a.bloom+' Bloom':'')+'</div></div>'
+            +(isDone?'<div class="ach-check">✓</div>':'');
+        el.appendChild(div);
+    }
+}
+
+// ── daily challenge helpers ──
+function mulberry32(seed){
+    return function(){
+        seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+        let t = Math.imul(seed ^ seed >>> 15, seed | 1);
+        t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+}
+function getDailyChallenge(){
+    const d = new Date();
+    const seed = d.getFullYear()*10000 + (d.getMonth()+1)*100 + d.getDate();
+    const rng = mulberry32(seed);
+    const pool = (SONGS||[]).filter(s => !s.isTutorial && !s.id.startsWith('__'));
+    if(!pool.length) return null;
+    const s = pool[Math.floor(rng()*pool.length)];
+    const avail = Object.keys(s.charts).filter(dd => !(s.comingSoon||[]).includes(dd));
+    if(!avail.length) return null;
+    const dcDiff = avail[Math.floor(rng()*avail.length)];
+    const r3=rng(), r4=rng(), r5=rng(), r6=rng(), r7=rng();
+    const mods = { mirror:r3>0.6, random:r4>0.75, hidden:r5>0.85, speedMod:r6>0.7?(r7>0.5?1.25:0.75):1.0 };
+    const ds = [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'), String(d.getDate()).padStart(2,'0')].join('-');
+    return {songId:s.id, diff:dcDiff, mods, date:ds};
+}
+function setDailyDone(date, scr, gr){
+    if(!progress.dailies) progress.dailies = {};
+    progress.dailies[date] = {score:scr, grade:gr, ts:Date.now()};
+    saveProgress();
+}
+function loadDailyChallenge(dc, song){
+    dailyMode = true; dailyChallenge = dc;
+    mirrorMode=!!dc.mods.mirror; randomMode=!!dc.mods.random;
+    hiddenMode=!!dc.mods.hidden; speedMod=dc.mods.speedMod||1.0;
+    document.getElementById('mirror-toggle').classList.toggle('on',mirrorMode);
+    document.getElementById('random-toggle').classList.toggle('on',randomMode);
+    document.getElementById('hidden-toggle').classList.toggle('on',hiddenMode);
+    document.querySelectorAll('#speed-seg button').forEach(b=>{
+        b.classList.toggle('sel', parseFloat(b.dataset.speed)===speedMod);
+    });
+    selectSong(song).then(()=>{
+        diff = dc.diff;
+        document.querySelectorAll('#seg-diff button').forEach(b=>{
+            b.classList.remove('sel');
+            if(b.dataset.d===dc.diff){ b.classList.add('sel'); b.style.color='#fff'; }
+        });
+        applyDiffApproach();
+    });
+}
+
 function initSongs(){
     if(!window.SONGS) throw new Error('songs.js 누락');
     SONGS = window.SONGS;
@@ -617,11 +826,42 @@ function initAudio(){
     musicGain.connect(analyser); analyser.connect(ctx.destination);
     sfxGain.connect(ctx.destination);
 }
+// resume AudioContext when the user returns to the tab
+document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState==='visible' && ctx && ctx.state==='suspended')
+        ctx.resume().catch(()=>{});
+});
 
 // build the song-select list
 function buildSongList(){
     const el=document.getElementById('song-list'); el.innerHTML='';
-    SONGS.forEach(s=>{
+    // daily challenge card at top
+    const dc=getDailyChallenge();
+    if(dc){
+        const dcSong=SONGS.find(s=>s.id===dc.songId);
+        if(dcSong){
+            const isDone=!!(progress.dailies&&progress.dailies[dc.date]);
+            const dcCard=document.createElement('div');
+            dcCard.className='song-card daily'+(isDone?' daily-done':'');
+            const dcDiff=DIFF_META[dc.diff]||[dc.diff.toUpperCase(),'#ffd166'];
+            const dcMods=[];
+            if(dc.mods.mirror) dcMods.push('미러');
+            if(dc.mods.random) dcMods.push('랜덤');
+            if(dc.mods.hidden) dcMods.push('히든');
+            if(dc.mods.speedMod!==1.0) dcMods.push(dc.mods.speedMod+'×');
+            dcCard.innerHTML='<div class="sc-title">오늘의 챌린지</div>'
+                +'<div class="sc-sub">'+dcSong.title+' — <span style="color:'+dcDiff[1]+'">'+dcDiff[0]+'</span>'
+                +(dcMods.length?' · '+dcMods.join(' · '):'')+'</div>'
+                +(isDone?'<div class="sc-meta" style="color:#5effa0">✓ 오늘 완료 ('+progress.dailies[dc.date].grade+')</div>'
+                        :'<div class="sc-meta">하루 1회 도전</div>');
+            dcCard.onclick=()=>{
+                if(isDone){ return; }
+                loadDailyChallenge(dc,dcSong);
+            };
+            el.appendChild(dcCard);
+        }
+    }
+    SONGS.filter(s=>s.id!=='__test__').forEach(s=>{
         const card=document.createElement('div'); card.className='song-card';
         const soon=s.comingSoon||[];
         const diffs=Object.keys(s.charts).map(d=>{
@@ -633,10 +873,20 @@ function buildSongList(){
             return '<span class="dchip" style="color:#555;text-decoration:line-through">'+m[0]+'</span>';
         }).join('')
         + (s.isTutorial?'<span class="dchip tut">TUTORIAL</span>':'');
+        const bestPB = Object.keys(s.charts)
+            .filter(d=>!(s.comingSoon||[]).includes(d) && progress.pbs[s.id+'|'+d])
+            .map(d=>progress.pbs[s.id+'|'+d])
+            .sort((a,b)=>b.score-a.score)[0];
+        const pbHtml = bestPB
+            ? '<div class="sc-pb"><b style="color:'+(
+                bestPB.grade==='AP'?'#ffd166':bestPB.grade==='SS'?'#ffd166':bestPB.grade==='S'?'#5ee0ff':
+                bestPB.grade==='A'?'#5effa0':bestPB.grade==='B'?'#b07cff':'#9a8fb5')+'">'+bestPB.grade+'</b> '+bestPB.score.toLocaleString()+'</div>'
+            : '';
         card.innerHTML='<div class="sc-title">'+s.title+'</div>'
             + (s.subtitle?'<div class="sc-sub">'+s.subtitle+'</div>':'')
             + '<div class="sc-meta">'+fmtDur(s.duration)+' · '+s.bpm+' BPM · '+chartNotes(s)+' notes</div>'
-            + '<div class="sc-diffs">'+diffs+'</div>';
+            + '<div class="sc-diffs">'+diffs+'</div>'
+            + pbHtml;
         card.onclick=()=>selectSong(s);
         el.appendChild(card);
     });
@@ -647,6 +897,7 @@ function fmtDur(d){ const m=Math.floor(d/60); return m+':'+String(Math.floor(d%6
 // lazy-load a song's audio (script src works from file://) then decode
 function loadAudio(s){
     return new Promise((resolve,reject)=>{
+        if(s.id==='__test__' && window._testAudioBuffer){ audioBuffer=window._testAudioBuffer; resolve(); return; }
         const decode=()=>{
             const b64 = window.AUDIO && window.AUDIO[s.id];
             if(!b64){ reject(new Error('오디오 누락')); return; }
@@ -664,6 +915,7 @@ function loadAudio(s){
 const titleCv = document.getElementById('title-cv');
 const titleG  = titleCv ? titleCv.getContext('2d') : null;
 let titleRaf  = 0;
+let _titleStars=null, _titlePetals=[], _titleBurstDone=false, _titleIntroPlayed=false;
 
 function resizeTitleCv(){
     if(!titleCv) return;
@@ -676,19 +928,160 @@ function resizeTitleCv(){
 function startTitleAnim(){
     if(titleRaf||!titleG) return;
     resizeTitleCv();
-    function frame(ts){
-        const tw=window.innerWidth, th=window.innerHeight;
+
+    const titleEl=document.querySelector('#ov-title .title');
+    const startEl=document.querySelector('.title-start');
+    const bloomEl=document.getElementById('title-bloom-display');
+
+    if(!_titleStars){
+        _titleStars=[];
+        const SW=window.innerWidth, SH=window.innerHeight;
+        for(let i=0;i<80;i++) _titleStars.push({
+            x:Math.random()*SW, y:Math.random()*SH,
+            r:Math.random()*1.4+0.4, a:Math.random(), da:0.006+Math.random()*0.012
+        });
+    }
+
+    const isFirst=!_titleIntroPlayed;
+    _titleIntroPlayed=true;
+
+    if(isFirst){
+        titleEl.style.cssText='opacity:0;transform:scale(0.88) translateY(12px);transition:none';
+        startEl.style.cssText='opacity:0;transition:none;animation:none';
+        bloomEl.style.cssText='opacity:0;transition:none';
+    }
+
+    _titlePetals=[]; _titleBurstDone=false;
+    let introRevealed=!isFirst;
+
+    function revealTitleHTML(){
+        if(introRevealed) return;
+        introRevealed=true;
+        titleEl.style.cssText='opacity:1;transform:scale(1) translateY(0);transition:opacity .7s cubic-bezier(.16,1,.3,1),transform .7s cubic-bezier(.16,1,.3,1)';
+        setTimeout(()=>{
+            startEl.style.cssText='';
+            bloomEl.style.cssText='opacity:1;transition:opacity .6s';
+        }, 680);
+    }
+
+    function drawIntroAnim(t,cx,cy,W,H){
+        const noteR=26;
+        for(const bt of [0.28,0.62,0.96]){
+            if(t<bt) continue;
+            const age=t-bt; if(age>1.5) continue;
+            titleG.beginPath(); titleG.arc(cx,cy,age*76,0,Math.PI*2);
+            titleG.strokeStyle=`rgba(176,124,255,${Math.max(0,0.55-age*0.38)})`; titleG.lineWidth=1.8; titleG.stroke();
+        }
+        if(t>0.2){
+            const gn=titleG.createRadialGradient(cx,cy,0,cx,cy,noteR*1.8);
+            gn.addColorStop(0,'rgba(176,124,255,.8)');
+            gn.addColorStop(0.5,'rgba(176,124,255,.28)');
+            gn.addColorStop(1,'rgba(176,124,255,0)');
+            titleG.fillStyle=gn; titleG.beginPath(); titleG.arc(cx,cy,noteR*1.8,0,Math.PI*2); titleG.fill();
+            titleG.beginPath(); titleG.arc(cx,cy,noteR,0,Math.PI*2);
+            titleG.strokeStyle=`rgba(210,185,255,${0.7+Math.sin(t*9)*0.2})`; titleG.lineWidth=2.6; titleG.stroke();
+        }
+        if(t>0.72){
+            const ap=Math.min(1,(t-0.72)/1.48);
+            const maxR=Math.min(W,H)*0.42;
+            const ringR=maxR-(maxR-noteR-2)*ap;
+            if(ringR>noteR+4){
+                const rp=0.55+Math.sin(t*9)*0.24;
+                titleG.beginPath(); titleG.arc(cx,cy,ringR,0,Math.PI*2);
+                titleG.strokeStyle=`rgba(255,94,168,${rp})`; titleG.lineWidth=3.5; titleG.stroke();
+                titleG.beginPath(); titleG.arc(cx,cy,ringR,0,Math.PI*2);
+                titleG.strokeStyle=`rgba(255,94,168,${rp*0.25})`; titleG.lineWidth=10; titleG.stroke();
+            }
+            for(const b of [1.05,1.45,1.85]){
+                if(t<b) continue;
+                const ia=t-b; if(ia>0.85) continue;
+                titleG.beginPath(); titleG.arc(cx,cy,noteR+ia*42,0,Math.PI*2);
+                titleG.strokeStyle=`rgba(94,224,255,${Math.max(0,0.44-ia*0.54)})`; titleG.lineWidth=1.5; titleG.stroke();
+            }
+        }
+    }
+
+    function drawBurstAnim(bt,cx,cy,W,H){
+        if(bt<0.45){
+            titleG.fillStyle=`rgba(225,205,255,${Math.max(0,0.88-bt*2.1)})`; titleG.fillRect(0,0,W,H);
+        }
+        for(const sw of [0,0.12,0.26]){
+            if(bt<sw) continue;
+            const sa=bt-sw; if(sa>1.5) continue;
+            const al=Math.max(0,0.8-sa*0.56);
+            const sr=sa*Math.min(W,H)*0.65;
+            titleG.beginPath(); titleG.arc(cx,cy,sr,0,Math.PI*2);
+            titleG.strokeStyle=`rgba(255,143,208,${al})`; titleG.lineWidth=3.5; titleG.stroke();
+            titleG.beginPath(); titleG.arc(cx,cy,sr,0,Math.PI*2);
+            titleG.strokeStyle=`rgba(176,124,255,${al*0.33})`; titleG.lineWidth=10; titleG.stroke();
+        }
+    }
+
+    function drawIdleAnim(t,cx,cy,W,H){
+        const period=2.4;
+        const i0=Math.floor(t/period);
+        for(let i=Math.max(0,i0-2);i<=i0;i++){
+            const age=t-i*period; if(age<0) continue;
+            const a=Math.max(0,0.32-age*0.08); if(a<=0) continue;
+            titleG.beginPath(); titleG.arc(cx,cy,age*50,0,Math.PI*2);
+            titleG.strokeStyle=`rgba(176,124,255,${a})`; titleG.lineWidth=1.5; titleG.stroke();
+        }
         const bRatio=Math.min(progress.bloom/BLOOM_MAX,1);
+        if(bRatio>0){
+            const growP=Math.min(1,t*0.6);
+            drawTitleBeam(W,H,bRatio*growP);
+            drawTitleFlower(cx,H,bRatio*growP,t);
+        }
+    }
+
+    const t0=performance.now();
+    function frame(ts){
+        const t=(ts-t0)/1000;
+        const W=window.innerWidth, H=window.innerHeight;
+        const cx=W/2, cy=H/2;
         const cRatio=getClearedRatio();
-        // grayscale → colour based on total clears
+
+        titleG.clearRect(0,0,W,H);
+        titleG.fillStyle='rgba(5,3,10,0.97)';
+        titleG.fillRect(0,0,W,H);
+
+        for(const s of _titleStars){
+            s.a+=s.da; if(s.a>=1||s.a<=0) s.da*=-1;
+            titleG.beginPath(); titleG.arc(s.x,s.y,s.r,0,Math.PI*2);
+            titleG.fillStyle=`rgba(210,200,255,${Math.max(0,s.a)*0.55})`; titleG.fill();
+        }
+
+        if(!isFirst){
+            if(!introRevealed) revealTitleHTML();
+            drawIdleAnim(t,cx,cy,W,H);
+        } else if(t<2.2){
+            drawIntroAnim(t,cx,cy,W,H);
+        } else {
+            if(!_titleBurstDone){
+                _titleBurstDone=true;
+                revealTitleHTML();
+                const cs=['#ff5ea8','#b07cff','#5ee0ff','#ffd166','#5effa0'];
+                for(let i=0;i<110;i++){
+                    const a=Math.random()*Math.PI*2, sp=2.5+Math.random()*7;
+                    _titlePetals.push({x:cx,y:cy,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-2,
+                        r:Math.random()*4.5+1.5,color:cs[Math.floor(Math.random()*5)],
+                        a:1,decay:0.005+Math.random()*0.012});
+                }
+            }
+            drawBurstAnim(t-2.2,cx,cy,W,H);
+            drawIdleAnim(t-2.2,cx,cy,W,H);
+        }
+
+        for(const p of _titlePetals){
+            p.x+=p.vx; p.y+=p.vy; p.vy+=0.04; p.vx*=0.993; p.a-=p.decay;
+            if(p.a<=0) continue;
+            titleG.beginPath(); titleG.arc(p.x,p.y,p.r,0,Math.PI*2);
+            titleG.fillStyle=hexA(p.color,p.a); titleG.fill();
+        }
+
         document.getElementById('ov-title').style.filter=
             `grayscale(${(1-cRatio).toFixed(3)}) brightness(${(0.62+0.38*cRatio).toFixed(3)})`;
-        // update bloom counter text
         document.getElementById('title-bloom-val').textContent=progress.bloom.toLocaleString();
-
-        titleG.clearRect(0,0,tw,th);
-        drawTitleBeam(tw, th, bRatio);
-        drawTitleFlower(tw/2, th, bRatio, ts/1000);
         titleRaf=requestAnimationFrame(frame);
     }
     titleRaf=requestAnimationFrame(frame);
@@ -698,6 +1091,13 @@ function stopTitleAnim(){
     if(titleRaf){ cancelAnimationFrame(titleRaf); titleRaf=0; }
     if(titleCv) titleG.clearRect(0,0,titleCv.width,titleCv.height);
     document.getElementById('ov-title').style.filter='';
+    // reset inline styles so title elements are visible when returning to title screen
+    const _te=document.querySelector('#ov-title .title');
+    const _se=document.querySelector('.title-start');
+    const _be=document.getElementById('title-bloom-display');
+    if(_te) _te.style.cssText='';
+    if(_se) _se.style.cssText='';
+    if(_be) _be.style.cssText='';
 }
 
 function drawTitleBeam(tw, th, bRatio){
@@ -881,6 +1281,7 @@ function stopPreview(){
 // pick a song → load its audio → show the setup screen
 async function selectSong(s){
     stopPreview();
+    if(ctx && ctx.state==='suspended') ctx.resume().catch(()=>{});
     SONG=s; audioBuffer=null;
     document.getElementById('ov-songs').classList.add('hidden');
     document.getElementById('ov-result').classList.add('hidden');
@@ -890,6 +1291,9 @@ async function selectSong(s){
         + (s.isTutorial?'<span class="tutorial-badge">TUTORIAL</span>':'');
     buildDifficultyUI();
     applyDiffApproach();
+    // update practice slider range for this song
+    const psl=document.getElementById('practice-start');
+    if(psl){ psl.max=Math.ceil(s.duration)||300; psl.value=Math.min(parseInt(psl.value)||0, +psl.max); practiceStartSec=+psl.value; }
 
     const panel=document.getElementById('panel');
     panel.style.opacity='.4'; panel.style.pointerEvents='none';
@@ -1057,6 +1461,7 @@ function onDown(id,x,y){
     const p=P(best);
     const j = bd<=HIT.perfect?'perfect': bd<=HIT.good?'good':'miss';
     if(j!=='miss'){ hitErrors.push((now-best.t)*1000); updateTiming(); }   // +late / -early
+    if(!auto && !replayMode) replayLog.push({t:now, noteIdx:objects.indexOf(best), judge:j});
     if(best.type==='tap'){
         best.state='done';
         applyJudge(j,p,best.color);
@@ -1075,6 +1480,7 @@ function finalizeHold(o, endTime){
     const frac = Math.max(0,Math.min(1,(endTime-o.t)/(o.dur||0.001)));
     const p=P(o);
     const tail = frac>=0.85?'perfect': frac>=0.5?'good':'miss';
+    if(!auto && !replayMode) replayLog.push({t:endTime, noteIdx:objects.indexOf(o), judge:tail, isHold:true});
     applyTail(tail,p,o.color);
     o.state='done';
 }
@@ -1104,6 +1510,7 @@ function applyJudge(kind,p,color){
         score += kind==='perfect' ? scorePerJudge : Math.floor(scorePerJudge/2);
         bloom(p,color, kind==='perfect'?1:0.6);
         ripples.push({x:p.x,y:p.y,r:R,a:1,color});
+        const ce=document.getElementById('combo'); ce.classList.remove('combo-pop'); void ce.offsetWidth; ce.classList.add('combo-pop');
     }
     syncHUD();
 }
@@ -1175,12 +1582,17 @@ function startGame(){
     score=0; combo=0; maxCombo=0;
     cnt={perfect:0,good:0,miss:0}; judgeSum=0; judgeCount=0;
     floats=[]; petals=[]; ripples=[]; nextGlows=[]; pointers.clear(); hitErrors=[];
+    if(!replayMode) replayLog=[]; else replayIdx=0;
     document.getElementById('timing-live').textContent='';
     buildObjects(); syncHUD();
+    // practice: skip notes before start position
+    if(practiceMode && !replayMode && practiceStartSec>0)
+        objects.forEach(o=>{ if(o.t<practiceStartSec) o.state='done'; });
 
     document.getElementById('ov-start').classList.add('hidden');
     document.getElementById('ov-result').classList.add('hidden');
-    document.getElementById('auto-badge').classList.toggle('on', auto);
+    document.getElementById('auto-badge').classList.toggle('on', auto && !replayMode);
+    document.getElementById('replay-badge').classList.toggle('on', replayMode);
     document.getElementById('crowning-badge').classList.toggle('on', gameMode==='crowning');
     document.getElementById('random-badge').classList.toggle('on', randomMode);
     document.getElementById('mirror-badge').classList.toggle('on', mirrorMode);
@@ -1189,15 +1601,21 @@ function startGame(){
     sbEl.textContent='⚡ '+speedMod+'×';
     sbEl.classList.toggle('on', speedMod!==1.0);
 
-    if(ctx.state==='suspended') ctx.resume();
+    // recover from closed context (can happen after long background)
+    if(ctx.state==='closed'){ ctx=null; previewFadeGain=null; previewFilter=null; initAudio(); }
     // fresh source
     srcNode = ctx.createBufferSource();
     srcNode.buffer = audioBuffer;
     srcNode.connect(musicGain);
     srcNode.playbackRate.value = speedMod;
-    leadIn = APPROACH/speedMod + LEAD_EXTRA;
-    audioStart = ctx.currentTime + leadIn;
-    srcNode.start(audioStart);
+    const pStart = (practiceMode && !replayMode) ? practiceStartSec : 0;
+    leadIn = pStart > 0 ? 0.5 : APPROACH/speedMod + LEAD_EXTRA;
+    audioStart = ctx.currentTime + leadIn - pStart/speedMod;
+    const _startAudio=()=>{
+        audioStart = ctx.currentTime + leadIn - pStart/speedMod;
+        srcNode.start(ctx.currentTime + leadIn, pStart);
+    };
+    ctx.state==='suspended' ? ctx.resume().then(_startAudio).catch(_startAudio) : _startAudio();
 
     running=true;
     document.getElementById('pause-btn').classList.add('active');
@@ -1259,7 +1677,7 @@ function update(now){
             // human: auto-miss if window passed without press
             if((o.state==='approach') && now > o.t + HIT.miss/1000){
                 const p=P(o);
-                o.state= o.type==='tap' ? 'done' : 'done';
+                o.state='done';
                 applyJudge('miss',p,o.color);
                 if(o.type==='hold'){ /* tail also lost */ applyTail('miss',p,o.color); }
             }
@@ -1293,6 +1711,31 @@ function update(now){
             if(!autoCursor.has){ autoCursor.x=p.x; autoCursor.y=p.y; autoCursor.has=true; }
             autoCursor.x+=(p.x-autoCursor.x)*0.18;
             autoCursor.y+=(p.y-autoCursor.y)*0.18;
+        }
+    }
+
+    // replay playback: inject recorded events at their original timestamps
+    if(replayMode){
+        while(replayIdx < replayPlayLog.length){
+            const ev = replayPlayLog[replayIdx];
+            if(ev.t > now) break;
+            replayIdx++;
+            const ro = objects[ev.noteIdx];
+            if(!ro || ro.state==='done') continue;
+            const rp = P(ro);
+            if(ev.isHold){
+                if(ro.state==='held'){ applyTail(ev.judge,rp,ro.color); ro.state='done'; }
+            } else {
+                hitSound();
+                applyJudge(ev.judge,rp,ro.color);
+                if(ev.judge!=='miss'){
+                    if(ro.type==='tap'){ ro.state='done'; addNextGlow(ro); }
+                    else { ro.headJudge=ev.judge; ro.state='held'; ro.lastTick=now; addNextGlow(ro); }
+                } else {
+                    if(ro.type==='hold') applyTail('miss',rp,ro.color);
+                    ro.state='done';
+                }
+            }
         }
     }
 
@@ -1693,9 +2136,22 @@ function drawRainingNote(o,p,appT,now){
         g.fillStyle=ig; g.beginPath(); g.arc(p.x,p.y,R,0,Math.PI*2); g.fill();
     }
 
-    // hold: progress arc at judgment line while held
+    // hold: vertical bar above finger (remaining time) + arc at judgment line
     if(o.state==='held'){
         const frac=Math.max(0,Math.min(1,(now-o.t)/(o.dur||0.001)));
+        const maxBarH=Math.min(R*5.5,H*0.22);
+        const remH=maxBarH*(1-frac);
+        // faint track showing full hold extent
+        const bgG=g.createLinearGradient(p.x,jy-maxBarH,p.x,jy);
+        bgG.addColorStop(0,hexA(col,0)); bgG.addColorStop(1,hexA(col,0.1));
+        g.fillStyle=bgG; g.fillRect(p.x-R*0.19,jy-maxBarH,R*0.38,maxBarH);
+        // remaining bar (shrinks upward as hold progresses)
+        if(remH>2){
+            const fg=g.createLinearGradient(p.x,jy-remH,p.x,jy);
+            fg.addColorStop(0,hexA(col,0)); fg.addColorStop(0.5,hexA(col,0.82)); fg.addColorStop(1,hexA(col,0.5));
+            g.fillStyle=fg; g.fillRect(p.x-R*0.19,jy-remH,R*0.38,remH);
+        }
+        // progress arc at judgment line
         g.beginPath(); g.arc(p.x,jy,R*1.22,-Math.PI/2,-Math.PI/2+frac*Math.PI*2);
         g.strokeStyle=hexA('#ffffff',0.88); g.lineWidth=5; g.stroke();
         g.beginPath(); g.arc(p.x,jy,R*(0.48+0.14*Math.sin(now*20)),0,Math.PI*2);
@@ -1745,6 +2201,15 @@ function hexA(hex,a){
     return `rgba(${r},${gn},${b},${Math.max(0,Math.min(1,a))})`;
 }
 
+function animateScore(el, target, dur=1100){
+    const t0=performance.now();
+    (function tick(now){
+        const p=Math.min((now-t0)/dur,1), e=1-Math.pow(1-p,3);
+        el.textContent=Math.floor(target*e).toLocaleString();
+        if(p<1) requestAnimationFrame(tick); else el.textContent=target.toLocaleString();
+    })(t0);
+}
+
 function endGame(){
     running=false; paused=false;
     document.getElementById('pause-btn').classList.remove('active');
@@ -1752,6 +2217,7 @@ function endGame(){
     const acc = judgeCount? judgeSum/judgeCount*100 : 0;
     const isAP = cnt.miss===0 && cnt.good===0;
     const isFC = cnt.miss===0;
+    if(isAP && !replayMode) score = 1000000; // floor rounding correction
     let grade,color;
     if(isAP)             {grade='AP'; color='';}
     else if(acc>=98)     {grade='SS'; color='#ffd166';}
@@ -1769,13 +2235,26 @@ function endGame(){
     if(isAP){ fcEl.textContent='ALL PERFECT'; fcEl.className='ap'; }
     else if(isFC){ fcEl.textContent='FULL COMBO'; fcEl.className='fc'; }
     else { fcEl.className='hidden'; }
-    document.getElementById('r-score').textContent=score.toLocaleString();
+    animateScore(document.getElementById('r-score'), score);
+
+    // song / diff info on result screen
+    const snEl=document.getElementById('r-song-name');
+    const sdEl=document.getElementById('r-diff-name');
+    if(snEl) snEl.textContent=SONG.title||'';
+    if(sdEl && DIFF_META[diff]){
+        sdEl.textContent=DIFF_META[diff][0];
+        sdEl.style.color=DIFF_META[diff][1]||'#fff';
+    }
 
     // PB comparison
     const pbKey=SONG.id+'|'+diff;
     const prevPB=progress.pbs[pbKey];
     const nrEl=document.getElementById('r-newrecord'), pbEl=document.getElementById('r-pb-line');
-    if(!auto){
+    if(testMode){
+        nrEl.textContent='🔧 에디터 테스트 — 기록 저장 안 됨'; nrEl.className=''; pbEl.className='hidden';
+    } else if(replayMode){
+        nrEl.textContent='▶ REPLAY'; nrEl.className=''; pbEl.className='hidden';
+    } else if(!auto){
         if(!prevPB || score>prevPB.score){
             progress.pbs[pbKey]={score,acc:parseFloat(acc.toFixed(2)),grade};
             saveProgress();
@@ -1787,6 +2266,29 @@ function endGame(){
             pbEl.className='';
         }
     } else { nrEl.className='hidden'; pbEl.className='hidden'; }
+    // save replay log (skip for replay, auto, practice, test)
+    if(!auto && !replayMode && !practiceMode && !testMode){
+        try{ localStorage.setItem('pb_replay_'+pbKey, JSON.stringify(replayLog)); }catch(e){}
+    }
+    // replay button: show only when a log exists and we're not in replay/practice/test
+    const replayBtnEl=document.getElementById('r-replay');
+    if(!replayMode && !practiceMode && !testMode && localStorage.getItem('pb_replay_'+pbKey))
+        replayBtnEl.style.display='';
+    else replayBtnEl.style.display='none';
+    // achievements
+    if(!testMode){
+        checkAchievements({
+            cleared:!auto&&!replayMode, isFC, isAP, maxCombo, score,
+            mirrorMode, hiddenMode, speedMod, practiceMode,
+            dailyCompleted: dailyMode&&!replayMode&&!!dailyChallenge,
+            replayWatched: replayMode
+        });
+    }
+    // daily challenge completion
+    if(dailyMode && !replayMode && dailyChallenge){
+        setDailyDone(dailyChallenge.date, score, grade);
+        dailyMode=false; dailyChallenge=null;
+    }
 
     document.getElementById('r-acc').textContent=acc.toFixed(2)+'%';
     document.getElementById('r-combo').textContent=maxCombo;
@@ -1806,11 +2308,13 @@ function endGame(){
     } else { tl.style.display='none'; cb.style.display='none'; }
 
     // bloom reward
-    const bloomEarned = awardBloom();
     const bloomLine = document.getElementById('r-bloom-line');
-    bloomLine.style.display = '';
-    document.getElementById('r-bloom').textContent = '+' + bloomEarned;
-    document.getElementById('r-bloom-total').textContent = '(합계 ' + progress.bloom.toLocaleString() + ' / ' + BLOOM_MAX.toLocaleString() + ')';
+    if(!replayMode && !testMode){
+        const bloomEarned = awardBloom();
+        bloomLine.style.display = '';
+        document.getElementById('r-bloom').textContent = '+' + bloomEarned;
+        document.getElementById('r-bloom-total').textContent = '(합계 ' + progress.bloom.toLocaleString() + ' / ' + BLOOM_MAX.toLocaleString() + ')';
+    } else { bloomLine.style.display='none'; }
 
     document.getElementById('ov-result').classList.remove('hidden');
 }
@@ -1840,7 +2344,8 @@ const DIFF_META={
     chaotic: ['CHAOTIC', '#ffd166'],
     end:     ['END',     '#ff5ea8'],
     torment: ['TORMENT', '#b07cff'],
-    '???':   ['? ? ?',   '#8a7da6']
+    '???':   ['? ? ?',   '#8a7da6'],
+    test:    ['TEST',    '#5ee0ff']
 };
 function buildDifficultyUI(){
     const seg=document.getElementById('seg-diff'); seg.innerHTML='';
@@ -1895,13 +2400,14 @@ autoT.addEventListener('click', ()=>{ auto=!auto; autoT.classList.toggle('on',au
 const hoverT=document.getElementById('hover-toggle');
 hoverT.addEventListener('click', ()=>{ hoverMode=!hoverMode; hoverT.classList.toggle('on',hoverMode); saveSettings(); });
 
-// ── settings: music / sfx volume + input offset ──
+// ── settings: music / sfx volume + input offset + note scale ──
 const musicSl=document.getElementById('music-vol'), sfxSl=document.getElementById('sfx-vol'),
-      offSl=document.getElementById('ingame-offset');
+      offSl=document.getElementById('ingame-offset'), noteScaleSl=document.getElementById('note-scale');
 function initSettingsUI(){
     musicSl.value=Math.round(musicVol*100); document.getElementById('music-vol-val').textContent=Math.round(musicVol*100)+'%';
     sfxSl.value=Math.round(sfxVol*100);     document.getElementById('sfx-vol-val').textContent=Math.round(sfxVol*100)+'%';
     offSl.value=inputOffset;                document.getElementById('ingame-offset-val').textContent=inputOffset+' ms';
+    if(noteScaleSl){ noteScaleSl.value=Math.round(noteScale*100); document.getElementById('note-scale-val').textContent=Math.round(noteScale*100)+'%'; }
     hoverT.classList.toggle('on', hoverMode);
 }
 musicSl.addEventListener('input', ()=>{ musicVol=+musicSl.value/100;
@@ -1913,6 +2419,11 @@ sfxSl.addEventListener('input', ()=>{ sfxVol=+sfxSl.value/100;
     if(ctx){ if(ctx.state==='suspended') ctx.resume(); sfx(660); } saveSettings(); });   // preview blip
 offSl.addEventListener('input', ()=>{ inputOffset=parseInt(offSl.value);
     document.getElementById('ingame-offset-val').textContent=inputOffset+' ms'; saveSettings(); });
+if(noteScaleSl) noteScaleSl.addEventListener('input', ()=>{
+    noteScale=+noteScaleSl.value/100;
+    document.getElementById('note-scale-val').textContent=noteScaleSl.value+'%';
+    resize(); saveSettings();
+});
 initSettingsUI();
 
 // ── in-game offset calibration (metronome tap → measure player latency) ──
@@ -1949,7 +2460,30 @@ igStartBtn.onclick=igStart; igApply.onclick=igApplyFn; document.getElementById('
 window.addEventListener('keydown', e=>{ if(igcal.active && (e.key===' '||e.code==='Space')){ e.preventDefault(); igTap(); } });
 
 document.getElementById('play-btn').addEventListener('click', startGame);
-document.getElementById('r-retry').addEventListener('click', startGame);
+document.getElementById('r-retry').addEventListener('click', ()=>{
+    if(replayMode){ replayMode=false; auto=false; }
+    startGame();
+});
+document.getElementById('r-replay').addEventListener('click', ()=>{
+    const key='pb_replay_'+SONG.id+'|'+diff;
+    const data=localStorage.getItem(key); if(!data) return;
+    replayPlayLog=JSON.parse(data); replayIdx=0; replayMode=true; auto=true;
+    startGame();
+});
+// practice mode toggle
+const practiceT=document.getElementById('practice-toggle');
+const practiceRow=document.getElementById('practice-row');
+const practiceSlider=document.getElementById('practice-start');
+const practiceValEl=document.getElementById('practice-start-val');
+practiceT.addEventListener('click',()=>{
+    practiceMode=!practiceMode; practiceT.classList.toggle('on',practiceMode);
+    practiceRow.style.display=practiceMode?'':'none';
+});
+practiceSlider.addEventListener('input',()=>{
+    practiceStartSec=+practiceSlider.value;
+    const m=Math.floor(practiceStartSec/60), s=practiceStartSec%60;
+    practiceValEl.textContent=m+':'+String(s).padStart(2,'0');
+});
 document.getElementById('pause-btn').addEventListener('click', pauseGame);
 document.getElementById('resume-btn').addEventListener('click', resumeGame);
 document.getElementById('pause-quit-btn').addEventListener('click', toSongSelect);
@@ -1961,6 +2495,8 @@ document.getElementById('r-menu').addEventListener('click', ()=>{
 function toSongSelect(){
     if(paused){ paused=false; try{ ctx.resume(); }catch(e){} }
     stopAudio(); stopPreview(); running=false;
+    if(replayMode){ replayMode=false; auto=false; }
+    dailyMode=false; dailyChallenge=null;
     document.getElementById('pause-btn').classList.remove('active');
     ['ov-result','ov-start','ov-settings','ov-title','ov-pause','ov-mods'].forEach(id=>document.getElementById(id).classList.add('hidden'));
     document.getElementById('ov-songs').classList.remove('hidden');
@@ -1980,6 +2516,15 @@ document.getElementById('back-title').addEventListener('click', ()=>{
     document.getElementById('ov-title').classList.remove('hidden');
     startTitleAnim();
 });
+document.getElementById('btn-achievements').addEventListener('click', ()=>{
+    buildAchievements();
+    document.getElementById('ov-songs').classList.add('hidden');
+    document.getElementById('ov-achievements').classList.remove('hidden');
+});
+document.getElementById('back-achievements').addEventListener('click', ()=>{
+    document.getElementById('ov-achievements').classList.add('hidden');
+    document.getElementById('ov-songs').classList.remove('hidden');
+});
 
 // settings navigation
 let settingsOrigin='songs';
@@ -1997,6 +2542,7 @@ document.getElementById('back-settings').addEventListener('click', ()=>{
 
 // mods panel navigation
 function openMods(){
+    if(dailyMode){ alert('오늘의 챌린지 중에는 모드를 변경할 수 없습니다.'); return; }
     document.getElementById('ov-start').classList.add('hidden');
     document.getElementById('ov-mods').classList.remove('hidden');
 }
@@ -2041,6 +2587,10 @@ window.addEventListener('keydown', e=>{
     if(e.key!=='Escape') return;
     if(running && paused){ resumeGame(); }
     else if(running && !paused){ pauseGame(); }
+    else if(!document.getElementById('ov-achievements').classList.contains('hidden')){
+        document.getElementById('ov-achievements').classList.add('hidden');
+        document.getElementById('ov-songs').classList.remove('hidden');
+    }
     else if(!document.getElementById('ov-mods').classList.contains('hidden')){
         document.getElementById('ov-mods').classList.add('hidden');
         document.getElementById('ov-start').classList.remove('hidden');
@@ -2082,9 +2632,9 @@ document.addEventListener('contextmenu', e => e.preventDefault());
 
 // ════════════════ DEV UTILITIES ════════════════
 window.PBDEV = {
-    // 시도할 격자 후보: 4분, 4분셋잇단, 8분, 8분셋잇단, 16분, 16분셋잇단
-    GRIDS: [4, 6, 8, 12, 16, 24],
-    GRID_NAMES: {4:'4분',6:'4분셋',8:'8분',12:'8분셋',16:'16분',24:'16분셋'},
+    // 시도할 격자 후보: 4분, 4분셋잇단, 8분, 8분셋잇단, 16분, 16분셋잇단, 32분, 32분셋잇단
+    GRIDS: [4, 6, 8, 12, 16, 24, 32, 48],
+    GRID_NAMES: {4:'4분',6:'4분셋',8:'8분',12:'8분셋',16:'16분',24:'16분셋',32:'32분',48:'32분셋'},
     THRESHOLD_MS: 25, // 이 이상이면 의도적 엇박으로 간주, 스냅 안 함
 
     _bpmMap(song){
@@ -2162,6 +2712,43 @@ try{ initSongs(); startTitleAnim(); }catch(err){
     const ld=document.getElementById('songs-loading');
     ld.classList.remove('hidden'); ld.textContent='로드 실패: '+err.message;
     console.error(err);
+}
+
+// ── Editor test mode: index.html?test=1 ──
+if(location.search.includes('test=1')){
+    (async ()=>{
+        try{
+            const raw=localStorage.getItem('pb_test_chart');
+            if(!raw){ alert('에디터에서 테스트를 시작해주세요.'); return; }
+            const data=JSON.parse(raw);
+            testMode=true;
+            const testSong={
+                id:'__test__', title:data.meta?.title||'에디터 테스트',
+                subtitle:'editor preview', bpm:data.meta?.bpm||120,
+                duration:data.meta?.duration||300,
+                charts:{ test:{level:0, objects:data.objects||[], offset:0} },
+                ladder:['test']
+            };
+            SONGS.unshift(testSong);
+            // decode audio from editor window if available
+            const rawAudio=window.opener?.rawAudioBuffer;
+            if(rawAudio){
+                initAudio();
+                window._testAudioBuffer=await ctx.decodeAudioData(rawAudio.slice(0));
+            }
+            // navigate straight to start screen
+            stopTitleAnim();
+            document.getElementById('ov-title').classList.add('hidden');
+            document.getElementById('ov-songs').classList.add('hidden');
+            await selectSong(testSong);
+            diff='test';
+            document.querySelectorAll('#seg-diff button').forEach(b=>{
+                b.classList.toggle('sel',b.dataset.d==='test');
+                if(b.dataset.d==='test') b.style.color='#fff';
+            });
+            updateLevelLabel();
+        }catch(e){ console.error('테스트 모드 로드 실패:',e); alert('로드 실패: '+e.message); }
+    })();
 }
 </script>
 </body>

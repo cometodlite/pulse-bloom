@@ -287,6 +287,7 @@ input[type=number]{ width:80px; }
         </div>
         <div class="row">
             <button class="ctl primary" id="export-btn">⬇ JSON 내보내기 (songs.js 형식)</button>
+            <button class="ctl" id="test-btn">🎮 인게임 테스트</button>
             <button class="ctl" id="import-btn">⬆ JSON 가져오기</button>
             <input type="file" id="import-input" accept=".json,application/json" style="display:none">
         </div>
@@ -397,6 +398,7 @@ async function loadFile(f){
     document.getElementById('file-name').textContent = '불러오는 중… '+f.name;
     try{
         const ab = await f.arrayBuffer();
+        window.rawAudioBuffer = ab.slice(0); // preserve for cross-window test mode
         buffer = await ctx.decodeAudioData(ab);
         duration = buffer.duration;
         document.getElementById('file-name').textContent = '✓ '+f.name+'  ('+fmt(duration)+')';
@@ -788,15 +790,24 @@ function bDrawTimeline(){
         bG.fillStyle='rgba(150,120,210,0.35)'; bG.font='10px Segoe UI'; bG.textAlign='left';
         bG.fillText(l, 3, Math.max(10,py+4));
     });
-    // BPM vertical grid
-    const first=Math.floor((bScroll-offSec)/beat);
-    const last=Math.ceil((bScroll+BCW/PPS-offSec)/beat);
-    for(let b=first;b<=last;b++){
-        const t=b*beat+offSec; const px=bTtoX(t);
+    // BPM vertical grid (measure → beat → 16th → 32nd)
+    const sub32=beat/8; // 32nd note interval
+    const first=Math.floor((bScroll-offSec)/sub32);
+    const last=Math.ceil((bScroll+BCW/PPS-offSec)/sub32);
+    for(let i=first;i<=last;i++){
+        const t=i*sub32+offSec; const px=bTtoX(t);
         if(px<-2||px>BCW+2) continue;
-        const isMeasure=b%4===0;
-        bG.strokeStyle=isMeasure?'rgba(180,120,255,0.28)':'rgba(255,255,255,0.07)';
-        bG.lineWidth=isMeasure?1.5:0.7;
+        const isMeasure=i%32===0; // every 4 beats
+        const isBeat=i%8===0;
+        const is16th=i%2===0;
+        // skip 32nd lines when zoomed far out (avoids visual clutter)
+        const skip32=!is16th && PPS<80;
+        if(skip32) continue;
+        bG.lineWidth=isMeasure?1.5:isBeat?0.7:is16th?0.45:0.3;
+        bG.strokeStyle=isMeasure?'rgba(180,120,255,0.28)'
+            :isBeat?'rgba(255,255,255,0.07)'
+            :is16th?'rgba(255,255,255,0.035)'
+            :'rgba(255,200,80,0.022)';
         bG.beginPath(); bG.moveTo(px,0); bG.lineTo(px,BCH); bG.stroke();
         if(isMeasure&&px>4&&px<BCW-4){
             bG.fillStyle='rgba(180,120,255,0.5)'; bG.font='10px Segoe UI'; bG.textAlign='left';
@@ -907,7 +918,7 @@ document.getElementById('b-snap-btn').onclick=()=>{
     const offSec=+document.getElementById('b-offset-ms').value/1000;
     const threshMs=+document.getElementById('b-snap-thresh').value||25;
     const thresh=threshMs/1000;
-    const GRIDS=[4,6,8,12,16,24];
+    const GRIDS=[4,6,8,12,16,24,32,48];
     bPushUndo();
     let snapped=0;
     notes=notes.map(n=>{
@@ -952,6 +963,26 @@ document.getElementById('export-btn').onclick=()=>{
     close.textContent='닫기'; close.style.cssText='position:fixed;top:calc(50% + 156px);left:50%;transform:translateX(-50%);z-index:9999;padding:8px 24px;background:#3d1f8a;color:#fff;border:none;border-radius:8px;cursor:pointer;font:14px inherit';
     close.onclick=()=>{ document.body.removeChild(pre); document.body.removeChild(close); };
     document.body.appendChild(close);
+};
+
+document.getElementById('test-btn').onclick=()=>{
+    if(!notes.length){ alert('노트가 없습니다.'); return; }
+    if(!window.rawAudioBuffer){ alert('오디오 파일을 먼저 불러주세요.'); return; }
+    const objects=notes.map(n=>{
+        const t=Math.round(effT(n)*1000)/1000;
+        const x=Math.round((n.nx||0.5)*1000)/1000;
+        const obj={t,x,y:0.5,type:n.type||'tap'};
+        if(n.type==='hold'&&n.dur>0) obj.dur=Math.round(n.dur*1000)/1000;
+        return obj;
+    });
+    const meta={
+        title:document.getElementById('title').value||fileName||'에디터 테스트',
+        bpm:parseFloat(document.getElementById('bpm').value)||120,
+        duration:duration||300
+    };
+    try{ localStorage.setItem('pb_test_chart',JSON.stringify({objects,meta})); }
+    catch(e){ alert('저장 실패: '+e.message); return; }
+    window.open('index.html?test=1','pb_test_game');
 };
 
 document.getElementById('import-btn').onclick=()=>document.getElementById('import-input').click();
