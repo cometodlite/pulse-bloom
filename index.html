@@ -1849,6 +1849,22 @@ window.addEventListener('popstate', ()=>{
 // prevent long-press context menu (Android paste popup, iOS callout)
 document.addEventListener('contextmenu', e => e.preventDefault());
 
+// ════════════════ AUTO UPDATE ════════════════
+// Fetch latest commit SHA from GitHub API; reload if it changed since last visit.
+(function autoUpdate(){
+    setTimeout(async ()=>{
+        try{
+            const r=await fetch('https://api.github.com/repos/cometodlite/pulse-bloom/commits?per_page=1',{cache:'no-store'});
+            if(!r.ok) return;
+            const [c]=await r.json();
+            const sha=c.sha;
+            const prev=localStorage.getItem('pb_sha');
+            localStorage.setItem('pb_sha',sha);
+            if(prev && prev!==sha) location.reload();
+        }catch(e){}
+    },2500);
+})();
+
 // ════════════════ DEV UTILITIES ════════════════
 window.PBDEV = {
     // 시도할 격자 후보: 4분, 4분셋잇단, 8분, 8분셋잇단, 16분, 16분셋잇단
