@@ -300,8 +300,8 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
 /* PB badge on song cards */
 .sc-pb { font-size:.74rem; margin-top:4px; color:#6f6388; }
 .sc-pb b { color:#9a8fb5; font-weight:600; }
-/* achievements button */
-#btn-achievements { right:80px; }
+/* achievements button — 설정 버튼(≈70px)과 겹치지 않도록 충분한 간격 확보 */
+#btn-achievements { right:100px; }
 /* daily challenge card */
 .song-card.daily { border-color:rgba(255,209,102,.35); background:rgba(255,209,102,.04); }
 .daily-done { opacity:.65; }
