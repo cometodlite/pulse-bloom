@@ -251,6 +251,23 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
 .mod-badge.on { opacity:1; }
 #crowning-badge { color:#b07cff; border:1px solid rgba(176,124,255,.5); }
 #random-badge   { color:#ffd166; border:1px solid rgba(255,209,102,.5); }
+#mirror-badge   { color:#5ee0ff; border:1px solid rgba(94,224,255,.5); }
+
+/* FC / AP badge on result screen */
+#r-fc-badge { font-size:clamp(.9rem,3vw,1.2rem); font-weight:800; letter-spacing:.22em;
+    padding:4px 22px; border-radius:30px; border:2px solid; margin:2px 0 10px;
+    text-transform:uppercase; }
+#r-fc-badge.fc  { color:#ff8fd0; border-color:rgba(255,143,208,.5);
+    background:rgba(255,143,208,.08); text-shadow:0 0 20px rgba(255,143,208,.5); }
+#r-fc-badge.ap  { border-color:rgba(255,209,102,.6);
+    background:linear-gradient(120deg,#ffd166,#ff8fd0,#b07cff,#5ee0ff);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+    filter:drop-shadow(0 0 14px rgba(255,209,102,.4)); }
+
+/* AP grade gets rainbow fill */
+#grade.ap { background:linear-gradient(135deg,#ffd166 0%,#ff5ea8 40%,#b07cff 70%,#5ee0ff 100%);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+    filter:drop-shadow(0 0 30px rgba(255,209,102,.35)); }
 </style>
 </head>
 <body>
@@ -265,6 +282,7 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
             <div id="auto-badge">● AUTO PLAY</div>
             <div class="mod-badge" id="crowning-badge">👑 CROWNING</div>
             <div class="mod-badge" id="random-badge">🎲 RANDOM</div>
+            <div class="mod-badge" id="mirror-badge">🪞 MIRROR</div>
         </div>
         <div class="right">
             <div id="combo">0</div>
@@ -358,6 +376,13 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
                 </div>
                 <div class="switch"></div>
             </div>
+            <div class="toggle" id="mirror-toggle">
+                <div>
+                    <div class="t-lbl">미러</div>
+                    <div class="t-sub">노트 좌우 대칭 — X 위치를 반전</div>
+                </div>
+                <div class="switch"></div>
+            </div>
         </div>
     </div>
 
@@ -404,6 +429,7 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
     <div class="overlay hidden" id="ov-result">
         <div class="title" style="font-size:clamp(1.8rem,6vw,2.6rem)">RESULT</div>
         <div id="grade">A</div>
+        <div id="r-fc-badge" class="hidden"></div>
         <div class="r-line">SCORE <b id="r-score">0</b></div>
         <div class="r-line">ACCURACY <b id="r-acc">0%</b></div>
         <div class="r-line">MAX COMBO <b id="r-combo">0</b></div>
@@ -861,6 +887,7 @@ let APPROACH=1.2;        // seconds telegraph
 let auto=false;
 let gameMode='raining';   // 'raining' | 'crowning'
 let randomMode=false;
+let mirrorMode=false;
 const LEAD_EXTRA=1.0;    // countdown seconds before music after spawn lead
 let leadIn=0;
 
@@ -912,6 +939,7 @@ function buildObjects(){
         for(let i=nxArr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [nxArr[i],nxArr[j]]=[nxArr[j],nxArr[i]]; }
         objects.forEach((o,i)=>{ o.nx=nxArr[i]; o.zx=nxArr[i]; });
     }
+    if(mirrorMode){ objects.forEach(o=>{ o.nx=1-o.nx; o.zx=1-o.zx; }); }
 }
 function P(o){
     return gameMode==='crowning'
@@ -1121,6 +1149,7 @@ function startGame(){
     document.getElementById('auto-badge').classList.toggle('on', auto);
     document.getElementById('crowning-badge').classList.toggle('on', gameMode==='crowning');
     document.getElementById('random-badge').classList.toggle('on', randomMode);
+    document.getElementById('mirror-badge').classList.toggle('on', mirrorMode);
 
     if(ctx.state==='suspended') ctx.resume();
     // fresh source
@@ -1680,16 +1709,25 @@ function endGame(){
     document.getElementById('pause-btn').classList.remove('active');
     if(raf) cancelAnimationFrame(raf);
     const acc = judgeCount? judgeSum/judgeCount*100 : 0;
+    const isAP = cnt.miss===0 && cnt.good===0;
+    const isFC = cnt.miss===0;
     let grade,color;
-    if(acc>=98){grade='SS';color='#ffd166';}
-    else if(acc>=95){grade='S';color='#5ee0ff';}
-    else if(acc>=90){grade='A';color='#5effa0';}
-    else if(acc>=80){grade='B';color='#b07cff';}
-    else if(acc>=70){grade='C';color='#ff8fd0';}
-    else if(acc>=55){grade='D';color='#ffd166';}
-    else {grade='F';color='#ff5ea8';}
-    document.getElementById('grade').textContent=grade;
-    document.getElementById('grade').style.color=color;
+    if(isAP)             {grade='AP'; color='';}
+    else if(acc>=98)     {grade='SS'; color='#ffd166';}
+    else if(acc>=95)     {grade='S';  color='#5ee0ff';}
+    else if(acc>=90)     {grade='A';  color='#5effa0';}
+    else if(acc>=80)     {grade='B';  color='#b07cff';}
+    else if(acc>=70)     {grade='C';  color='#ff8fd0';}
+    else if(acc>=55)     {grade='D';  color='#ffd166';}
+    else                 {grade='F';  color='#ff5ea8';}
+    const gradeEl=document.getElementById('grade');
+    gradeEl.textContent=grade;
+    gradeEl.style.color=color;
+    gradeEl.className=isAP?'ap':'';
+    const fcEl=document.getElementById('r-fc-badge');
+    if(isAP){ fcEl.textContent='ALL PERFECT'; fcEl.className='ap'; }
+    else if(isFC){ fcEl.textContent='FULL COMBO'; fcEl.className='fc'; }
+    else { fcEl.className='hidden'; }
     document.getElementById('r-score').textContent=score.toLocaleString();
     document.getElementById('r-acc').textContent=acc.toFixed(2)+'%';
     document.getElementById('r-combo').textContent=maxCombo;
@@ -1921,6 +1959,8 @@ document.getElementById('mode-cards').addEventListener('click', e=>{
 // random toggle
 const randomT=document.getElementById('random-toggle');
 randomT.addEventListener('click', ()=>{ randomMode=!randomMode; randomT.classList.toggle('on',randomMode); });
+const mirrorT=document.getElementById('mirror-toggle');
+mirrorT.addEventListener('click', ()=>{ mirrorMode=!mirrorMode; mirrorT.classList.toggle('on',mirrorMode); });
 document.getElementById('r-cal').addEventListener('click', e=>{
     const adj=parseInt(e.currentTarget.dataset.adj||'0');
     inputOffset=Math.max(-300,Math.min(300, inputOffset+adj));
