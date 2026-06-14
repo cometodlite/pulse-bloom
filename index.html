@@ -797,9 +797,11 @@ async function selectSong(s){
 let SONG=null, SONGS=[];
 const COLORS=['#ff5ea8','#5ee0ff','#b07cff','#ffd166','#5effa0'];
 const JLINE=0.82;        // judgment line Y ratio (BLOOMING / RAINING)
-const BLOOM_ZONES=[0.12, 0.30, 0.50, 0.70, 0.88]; // 5 fixed X positions for BLOOMING
-const BLOOM_DROP=0.22;  // lane height as fraction of screen H
+const BLOOM_ZONES=[0.12, 0.30, 0.50, 0.70, 0.88];
+const BLOOM_DROP=0.22;
 function snapToZone(x){ return BLOOM_ZONES.reduce((b,z)=>Math.abs(x-z)<Math.abs(x-b)?z:b); }
+// GAME_MODE: 'pulsebloom' = active mode; 'classic' = BLOOMING/RAINING/CROWNING (disabled)
+const GAME_MODE='pulsebloom';
 let objects=[];
 let diff='normal';
 let APPROACH=1.2;        // seconds telegraph
@@ -852,6 +854,7 @@ function buildObjects(){
     captions = chart.captions || [];
 }
 function P(o){
+    if(GAME_MODE==='pulsebloom') return {x:o.nx*W, y:o.ny*H};
     if(o.phase==='blooming') return {x:o.zx*W, y:H*JLINE};
     if(o.phase==='raining')  return {x:o.nx*W, y:H*JLINE};
     return {x:o.nx*W, y:o.ny*H};
@@ -893,7 +896,7 @@ function onDown(id,x,y){
         const dt=Math.abs(o.t-now)*1000;
         if(dt>HIT.miss) continue;
         const p=P(o);
-        const onLine=o.phase==='blooming'||o.phase==='raining';
+        const onLine=GAME_MODE!=='pulsebloom'&&(o.phase==='blooming'||o.phase==='raining');
         const dist=onLine ? Math.abs(x-p.x) : Math.hypot(x-p.x,y-p.y);
         if(dist>R*(onLine?2.2:1.75)) continue;
         if(dt<bd){ bd=dt; best=o; }
@@ -1082,7 +1085,7 @@ function update(now){
             // hover mode (PC): cursor resting on a note auto-hits it at the right time, no click
             if(hoverMode && o.state==='approach' && cursor.on && now >= o.t - HIT.perfect/1000){
                 const p=P(o);
-                const onLn=o.phase==='blooming'||o.phase==='raining';
+                const onLn=GAME_MODE!=='pulsebloom'&&(o.phase==='blooming'||o.phase==='raining');
                 const hd=onLn?Math.abs(cursor.x-p.x):Math.hypot(cursor.x-p.x,cursor.y-p.y);
                 if(hd <= R*(onLn?2.2:1.75)){
                     const bd=Math.abs(now-o.t)*1000;
@@ -1174,6 +1177,85 @@ function drawFollowPoints(now){
     }
 }
 
+function drawWaves(now){
+    const cx=W/2, cy=H/2;
+    g.save();
+    g.globalCompositeOperation='lighter';
+    for(const o of objects){
+        if(o.state==='wait'||o.state==='done') continue;
+        const dt=o.t-now;
+        if(dt>APPROACH||dt<-0.12) continue;
+        const dist=Math.hypot(o.nx*W-cx, o.ny*H-cy);
+        if(dist<R*0.9) continue;
+        const prog=Math.max(0, 1-Math.max(0,dt)/APPROACH); // 0→1 as wave travels to note
+        const waveR=dist*prog;
+        if(waveR<2) continue;
+        const alpha=prog*0.5*(dt<0?Math.max(0,1+dt/0.12):1);
+        const thickness=4;
+        const wg=g.createRadialGradient(cx,cy,Math.max(0,waveR-thickness),cx,cy,waveR+thickness);
+        wg.addColorStop(0,hexA(o.color,0));
+        wg.addColorStop(0.5,hexA(o.color,alpha));
+        wg.addColorStop(1,hexA(o.color,0));
+        g.fillStyle=wg;
+        g.beginPath(); g.arc(cx,cy,waveR+thickness,0,Math.PI*2); g.fill();
+    }
+    g.globalCompositeOperation='source-over';
+    g.restore();
+}
+
+function drawPulseBloomNote(o,p,appT,now){
+    const col=o.color, isHold=o.type==='hold';
+    const dt=o.t-now;
+    const prog=1-Math.max(0,dt/APPROACH); // 0=far, 1=at hit time
+    const missFrac=dt<0?Math.min(1,Math.abs(dt)/(HIT.miss/1000)):0;
+    const a=(0.28+prog*0.68)*(1-missFrac*0.8);
+
+    // bloom glow as wave arrives (prog > 0.75)
+    if(prog>0.75){
+        const glowFrac=(prog-0.75)/0.25;
+        const gR=R*(1.5+glowFrac*1.0);
+        const gr=g.createRadialGradient(p.x,p.y,R*0.4,p.x,p.y,gR);
+        gr.addColorStop(0,hexA(col,0.38*glowFrac));
+        gr.addColorStop(1,hexA(col,0));
+        g.globalCompositeOperation='lighter';
+        g.fillStyle=gr; g.beginPath(); g.arc(p.x,p.y,gR,0,Math.PI*2); g.fill();
+        g.globalCompositeOperation='source-over';
+    }
+
+    // note body
+    if(!isHold){
+        const rg=g.createRadialGradient(p.x,p.y,0,p.x,p.y,R);
+        rg.addColorStop(0,hexA(col,0.9*a)); rg.addColorStop(0.65,hexA(col,0.45*a)); rg.addColorStop(1,hexA(col,0.04));
+        g.fillStyle=rg; g.beginPath(); g.arc(p.x,p.y,R,0,Math.PI*2); g.fill();
+        g.beginPath(); g.arc(p.x,p.y,R,0,Math.PI*2);
+        g.strokeStyle=hexA('#ffffff',0.38*a); g.lineWidth=1.8; g.stroke();
+    } else {
+        g.beginPath(); g.arc(p.x,p.y,R,0,Math.PI*2);
+        g.strokeStyle=hexA(col,0.92*a); g.lineWidth=3.5; g.stroke();
+        const ig=g.createRadialGradient(p.x,p.y,0,p.x,p.y,R);
+        ig.addColorStop(0,hexA(col,0.18*a)); ig.addColorStop(1,hexA(col,0));
+        g.fillStyle=ig; g.beginPath(); g.arc(p.x,p.y,R,0,Math.PI*2); g.fill();
+    }
+
+    // hold: progress arc while held
+    if(o.state==='held'){
+        const frac=Math.max(0,Math.min(1,(now-o.t)/(o.dur||0.001)));
+        g.beginPath(); g.arc(p.x,p.y,R*1.22,-Math.PI/2,-Math.PI/2+frac*Math.PI*2);
+        g.strokeStyle=hexA('#ffffff',0.88); g.lineWidth=5; g.stroke();
+        g.beginPath(); g.arc(p.x,p.y,R*(0.48+0.14*Math.sin(now*20)),0,Math.PI*2);
+        g.fillStyle=hexA(col,0.5); g.fill();
+    }
+    if(isHold && o.state==='approach'){
+        g.font='600 '+Math.round(R*0.5)+'px Segoe UI'; g.textAlign='center'; g.textBaseline='middle';
+        g.fillStyle=hexA('#ffffff',0.55*a); g.fillText('HOLD', p.x, p.y);
+    }
+    if(o.hint && (o.state==='approach'||o.state==='held')){
+        const ly=p.y-R*1.8;
+        g.font='700 '+Math.round(R*0.42)+'px Segoe UI'; g.textAlign='center'; g.textBaseline='bottom';
+        g.fillStyle=hexA('#fff',a*0.8); g.fillText(o.hint, p.x, ly);
+    }
+}
+
 function drawCrowningArrows(now){
     const vis=[];
     for(const o of objects){
@@ -1249,7 +1331,7 @@ function render(now){
 
     // judgment line (BLOOMING / RAINING phases)
     const jy=H*JLINE;
-    const hasJLine=objects.some(o=>o.phase!=='crowning'&&o.state!=='wait'&&o.state!=='done');
+    const hasJLine=GAME_MODE!=='pulsebloom'&&objects.some(o=>o.phase!=='crowning'&&o.state!=='wait'&&o.state!=='done');
     if(hasJLine){
         g.save();
         // RAINING: brighten line segment under arriving notes
@@ -1277,7 +1359,7 @@ function render(now){
         g.fillStyle=lg; g.fillRect(0,jy-14,W,28);
 
         // BLOOMING lane guides (5 short vertical lanes above judgment line)
-        const hasBloom=objects.some(o=>o.phase==='blooming'&&o.state==='approach');
+        const hasBloom=GAME_MODE!=='pulsebloom'&&objects.some(o=>o.phase==='blooming'&&o.state==='approach');
         if(hasBloom){
             const laneTop=jy-H*BLOOM_DROP;
             for(const zx of BLOOM_ZONES){
@@ -1315,11 +1397,11 @@ function render(now){
         g.restore();
     }
 
-    // A: follow-point connectors
-    drawFollowPoints(now);
+    if(GAME_MODE!=='pulsebloom') drawFollowPoints(now);
+    if(GAME_MODE!=='pulsebloom') drawCrowningArrows(now);
 
-    // CROWNING: direction arrows to next note
-    drawCrowningArrows(now);
+    // PULSEBLOOM: radial waves from center
+    if(GAME_MODE==='pulsebloom') drawWaves(now);
 
     // C: next-note hint glows (additive, behind notes)
     g.globalCompositeOperation='lighter';
@@ -1338,11 +1420,9 @@ function render(now){
         if(o.state==='wait'||o.state==='done') continue;
         const dt=o.t-now;
         const appT=Math.max(0,Math.min(1, dt/APPROACH));
-        // RAINING: visual Y falls full screen; BLOOMING: falls short lane; both hit-detect at JLINE
-        const p=o.phase==='raining'
-            ? {x:o.nx*W, y:H*JLINE*(1-Math.max(0,appT))}
-            : o.phase==='blooming'
-            ? {x:o.zx*W, y:H*JLINE-H*BLOOM_DROP*Math.max(0,appT)}
+        const p = GAME_MODE==='pulsebloom' ? P(o)
+            : o.phase==='raining' ? {x:o.nx*W, y:H*JLINE*(1-Math.max(0,appT))}
+            : o.phase==='blooming' ? {x:o.zx*W, y:H*JLINE-H*BLOOM_DROP*Math.max(0,appT)}
             : P(o);
         drawObject(o,p,appT,now);
     }
@@ -1383,6 +1463,7 @@ function render(now){
 }
 
 function drawObject(o,p,appT,now){
+    if(GAME_MODE==='pulsebloom'){ drawPulseBloomNote(o,p,appT,now); return; }
     if(o.phase==='blooming'){ drawBloomingNote(o,p,appT,now); return; }
     if(o.phase==='raining'){  drawRainingNote(o,p,appT,now);  return; }
     drawCrowningNote(o,p,appT,now);
