@@ -343,8 +343,8 @@ function switchTab(t){
     document.getElementById('mode-c-section').style.display = t==='c' ? '' : 'none';
     selectedNote = null;
     updateSelInfoA(); updateBSelInfo();
-    if(t==='b') bRenderLoop();
-    if(t==='c') cRenderLoop();
+    if(t==='b'){ bResize(); bRenderLoop(); }
+    if(t==='c'){ cResize(); cRenderLoop(); }
 }
 
 // ════════════════════════════════════════════════════
