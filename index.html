@@ -1452,9 +1452,11 @@ function onDown(id,x,y){
         const dt=Math.abs(o.t-now)*1000;
         if(dt>HIT.miss) continue;
         const p=P(o);
-        const onLine=true;
-        const dist=onLine ? Math.abs(x-p.x) : Math.hypot(x-p.x,y-p.y);
-        if(dist>R*(onLine?3.2:1.75)) continue;
+        // raining: any screen touch hits the best-timed note (Rizline style)
+        // crowning: require spatial proximity to the fixed note position
+        if(gameMode==='crowning'){
+            if(Math.hypot(x-p.x,y-p.y)>R*1.75) continue;
+        }
         if(dt<bd){ bd=dt; best=o; }
     }
     if(!best){ pointers.set(id,{x,y}); return; }
