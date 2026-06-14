@@ -6,7 +6,7 @@
 window.PBDEV = {
     GRIDS: [4, 6, 8, 12, 16, 24, 32, 48],
     GRID_NAMES: {4:'4분',6:'4분셋',8:'8분',12:'8분셋',16:'16분',24:'16분셋',32:'32분',48:'32분셋'},
-    THRESHOLD_MS: 25,
+    THRESHOLD_MS: 5,
 
     _bpmMap(song){
         return song.bpmMap || [{bpm: song.bpm, startSec: song.offset||0}];
