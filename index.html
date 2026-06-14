@@ -798,6 +798,7 @@ let SONG=null, SONGS=[];
 const COLORS=['#ff5ea8','#5ee0ff','#b07cff','#ffd166','#5effa0'];
 const JLINE=0.82;        // judgment line Y ratio (BLOOMING / RAINING)
 const BLOOM_ZONES=[0.12, 0.30, 0.50, 0.70, 0.88]; // 5 fixed X positions for BLOOMING
+const BLOOM_DROP=0.22;  // lane height as fraction of screen H
 function snapToZone(x){ return BLOOM_ZONES.reduce((b,z)=>Math.abs(x-z)<Math.abs(x-b)?z:b); }
 let objects=[];
 let diff='normal';
@@ -1275,31 +1276,38 @@ function render(now){
         lg.addColorStop(1,'rgba(180,120,255,0)');
         g.fillStyle=lg; g.fillRect(0,jy-14,W,28);
 
-        // zone markers for BLOOMING phase
+        // BLOOMING lane guides (5 short vertical lanes above judgment line)
         const hasBloom=objects.some(o=>o.phase==='blooming'&&o.state==='approach');
         if(hasBloom){
+            const laneTop=jy-H*BLOOM_DROP;
             for(const zx of BLOOM_ZONES){
                 const zxPx=zx*W;
-                // find closest approaching blooming note to this zone
                 let glow=0;
                 for(const o of objects){
                     if(o.phase!=='blooming'||o.state!=='approach'||o.zx!==zx) continue;
                     const dt=o.t-now;
-                    const appT=Math.max(0,Math.min(1,dt/APPROACH));
-                    const prox=1-appT;
+                    const prox=1-Math.max(0,Math.min(1,dt/APPROACH));
                     if(prox>glow) glow=prox;
                 }
                 g.save();
-                const tickH=glow>0.5 ? 10+6*(glow-0.5)*2 : 10;
-                const tickA=0.18+glow*0.55;
+                // lane column background
+                const lw=R*2.2;
+                const lg2=g.createLinearGradient(zxPx-lw,0,zxPx+lw,0);
+                lg2.addColorStop(0,hexA('#ffffff',0));
+                lg2.addColorStop(0.5,hexA('#ffffff',0.03+glow*0.06));
+                lg2.addColorStop(1,hexA('#ffffff',0));
+                g.fillStyle=lg2; g.fillRect(zxPx-lw,laneTop,lw*2,jy-laneTop);
+                // tick mark at judgment line
+                const tickA=0.20+glow*0.55;
                 g.strokeStyle=`rgba(255,255,255,${tickA})`;
                 g.lineWidth=2;
-                g.beginPath(); g.moveTo(zxPx,jy-tickH); g.lineTo(zxPx,jy+tickH); g.stroke();
-                if(glow>0.5){
-                    const tr=g.createRadialGradient(zxPx,jy,0,zxPx,jy,R*1.8);
-                    tr.addColorStop(0,`rgba(255,255,255,${0.22*(glow-0.5)*2})`);
+                g.beginPath(); g.moveTo(zxPx,jy-10); g.lineTo(zxPx,jy+10); g.stroke();
+                // glow pool at base when note is close
+                if(glow>0.55){
+                    const tr=g.createRadialGradient(zxPx,jy,0,zxPx,jy,R*2);
+                    tr.addColorStop(0,`rgba(255,255,255,${0.18*(glow-0.55)/0.45})`);
                     tr.addColorStop(1,'rgba(255,255,255,0)');
-                    g.fillStyle=tr; g.fillRect(zxPx-R*1.8,jy-R*1.8,R*3.6,R*3.6);
+                    g.fillStyle=tr; g.fillRect(zxPx-R*2,jy-R*2,R*4,R*4);
                 }
                 g.restore();
             }
@@ -1330,9 +1338,11 @@ function render(now){
         if(o.state==='wait'||o.state==='done') continue;
         const dt=o.t-now;
         const appT=Math.max(0,Math.min(1, dt/APPROACH));
-        // RAINING: visual Y falls from 0 → JLINE; hit detection (P) stays at JLINE
+        // RAINING: visual Y falls full screen; BLOOMING: falls short lane; both hit-detect at JLINE
         const p=o.phase==='raining'
             ? {x:o.nx*W, y:H*JLINE*(1-Math.max(0,appT))}
+            : o.phase==='blooming'
+            ? {x:o.zx*W, y:H*JLINE-H*BLOOM_DROP*Math.max(0,appT)}
             : P(o);
         drawObject(o,p,appT,now);
     }
@@ -1423,73 +1433,55 @@ function drawCrowningNote(o,p,appT,now){
 
 function drawBloomingNote(o,p,appT,now){
     const col=o.color, isHold=o.type==='hold';
-    const prog=1-appT;
-    const bR=R*Math.pow(Math.max(0,prog),0.65);
+    const jy=H*JLINE;
     const dt=o.t-now;
     const missFrac=dt<0?Math.min(1,Math.abs(dt)/(HIT.miss/1000)):0;
     const a=1-missFrac*0.55;
-    if(bR<1) return;
 
-    // note rises above judgment line as it blooms (p.y = JLINE)
-    const cy=p.y-bR*0.55;
-
-    // outer petals glow near peak
-    if(prog>0.65){
-        const glowA=(prog-0.65)/0.35;
-        const pulse=prog>0.92?1+0.12*Math.sin(now*22):1;
-        const gR=bR*pulse*1.6;
-        const gr=g.createRadialGradient(p.x,cy,bR*0.5,p.x,cy,gR);
-        gr.addColorStop(0,hexA(col,0.28*glowA*a));
-        gr.addColorStop(1,hexA(col,0));
-        g.globalCompositeOperation='lighter';
-        g.fillStyle=gr; g.beginPath(); g.arc(p.x,cy,gR,0,Math.PI*2); g.fill();
-        g.globalCompositeOperation='source-over';
-    }
-
-    // stem: thin line from judgment line up to note center
-    if(bR>4){
+    // short trailing tail (within the lane only)
+    if(p.y < jy-2 && appT>0.02){
+        const tailLen=Math.min(R*2.5, (jy-p.y)*0.5);
         g.save();
-        const sg=g.createLinearGradient(p.x,p.y,p.x,cy);
-        sg.addColorStop(0,hexA(col,0.5*a)); sg.addColorStop(1,hexA(col,0));
-        g.strokeStyle=sg; g.lineWidth=1.5;
-        g.beginPath(); g.moveTo(p.x,p.y); g.lineTo(p.x,cy+bR*0.3); g.stroke();
-        g.restore();
+        const tg=g.createLinearGradient(p.x,p.y-tailLen,p.x,p.y);
+        tg.addColorStop(0,hexA(col,0));
+        tg.addColorStop(1,hexA(col,0.28*a));
+        g.strokeStyle=tg; g.lineWidth=3;
+        g.beginPath(); g.moveTo(p.x,p.y-tailLen); g.lineTo(p.x,p.y);
+        g.stroke(); g.restore();
     }
 
-    // main bloom body
-    if(isHold){
-        g.beginPath(); g.arc(p.x,cy,bR,0,Math.PI*2);
-        g.strokeStyle=hexA(col,0.92*a); g.lineWidth=3.5; g.stroke();
-        const ig=g.createRadialGradient(p.x,cy,0,p.x,cy,bR);
-        ig.addColorStop(0,hexA(col,0.18*a)); ig.addColorStop(1,hexA(col,0));
-        g.fillStyle=ig; g.beginPath(); g.arc(p.x,cy,bR,0,Math.PI*2); g.fill();
-    } else {
-        const rg=g.createRadialGradient(p.x,cy,0,p.x,cy,bR);
-        rg.addColorStop(0,hexA(col,0.88*a)); rg.addColorStop(0.65,hexA(col,0.45*a)); rg.addColorStop(1,hexA(col,0.04));
-        g.fillStyle=rg; g.beginPath(); g.arc(p.x,cy,bR,0,Math.PI*2); g.fill();
-        g.beginPath(); g.arc(p.x,cy,bR,0,Math.PI*2);
+    // note body — fixed size R while falling
+    if(!isHold){
+        const rg=g.createRadialGradient(p.x,p.y,0,p.x,p.y,R);
+        rg.addColorStop(0,hexA(col,0.9*a)); rg.addColorStop(0.65,hexA(col,0.45*a)); rg.addColorStop(1,hexA(col,0.04));
+        g.fillStyle=rg; g.beginPath(); g.arc(p.x,p.y,R,0,Math.PI*2); g.fill();
+        g.beginPath(); g.arc(p.x,p.y,R,0,Math.PI*2);
         g.strokeStyle=hexA('#ffffff',0.45*a); g.lineWidth=1.8; g.stroke();
+    } else {
+        g.beginPath(); g.arc(p.x,p.y,R,0,Math.PI*2);
+        g.strokeStyle=hexA(col,0.92*a); g.lineWidth=3.5; g.stroke();
+        const ig=g.createRadialGradient(p.x,p.y,0,p.x,p.y,R);
+        ig.addColorStop(0,hexA(col,0.18*a)); ig.addColorStop(1,hexA(col,0));
+        g.fillStyle=ig; g.beginPath(); g.arc(p.x,p.y,R,0,Math.PI*2); g.fill();
     }
 
-    // hold: progress arc + pulsing core
+    // hold: progress arc at judgment line while held
     if(o.state==='held'){
         const frac=Math.max(0,Math.min(1,(now-o.t)/(o.dur||0.001)));
-        g.beginPath(); g.arc(p.x,cy,R*1.22,-Math.PI/2,-Math.PI/2+frac*Math.PI*2);
+        g.beginPath(); g.arc(p.x,jy,R*1.22,-Math.PI/2,-Math.PI/2+frac*Math.PI*2);
         g.strokeStyle=hexA('#ffffff',0.88); g.lineWidth=5; g.stroke();
-        g.beginPath(); g.arc(p.x,cy,R*(0.48+0.14*Math.sin(now*20)),0,Math.PI*2);
+        g.beginPath(); g.arc(p.x,jy,R*(0.48+0.14*Math.sin(now*20)),0,Math.PI*2);
         g.fillStyle=hexA(col,0.5); g.fill();
     }
-    if(isHold && o.state==='approach' && prog>0.4){
-        g.font='600 '+Math.round(bR*0.6)+'px Segoe UI'; g.textAlign='center'; g.textBaseline='middle';
-        g.fillStyle=hexA('#ffffff',0.6*(prog-0.4)/0.6*a); g.fillText('HOLD', p.x, cy);
+    if(isHold && o.state==='approach'){
+        g.font='600 '+Math.round(R*0.5)+'px Segoe UI'; g.textAlign='center'; g.textBaseline='middle';
+        g.fillStyle=hexA('#ffffff',0.6*a); g.fillText('HOLD', p.x, p.y);
     }
     if(o.hint && (o.state==='approach'||o.state==='held')){
         const pl=0.5+0.4*Math.sin(now*7);
-        g.beginPath(); g.arc(p.x,cy,bR*(1.55+0.12*Math.sin(now*7)),0,Math.PI*2);
-        g.strokeStyle=hexA('#ffffff',pl*a); g.lineWidth=2; g.stroke();
-        const ly=cy-bR*2.0;
+        const ly=p.y-R*2.0;
         g.font='700 '+Math.round(R*0.42)+'px Segoe UI'; g.textAlign='center'; g.textBaseline='bottom';
-        g.fillStyle=hexA('#fff',a); g.fillText(o.hint, p.x, ly);
+        g.fillStyle=hexA('#fff',a*pl); g.fillText(o.hint, p.x, ly);
     }
 }
 
