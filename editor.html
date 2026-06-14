@@ -77,7 +77,8 @@ input[type=number]{ width:80px; }
 
 /* Mode B canvas */
 #b-canvas { width:100%; height:340px; display:block; border-radius:10px;
-    background:#08060f; border:1px solid rgba(176,124,255,.15); cursor:crosshair; }
+    background:#08060f; border:1px solid rgba(176,124,255,.15); cursor:crosshair;
+    touch-action:none; }
 
 /* key pads */
 .pads { display:flex; gap:10px; margin-top:12px; }
@@ -220,7 +221,10 @@ input[type=number]{ width:80px; }
                     <span class="lbl">Offset</span>
                     <input type="number" id="b-offset-ms" value="0" style="width:72px">
                     <span class="lbl">ms</span>
-                    <button class="ctl" id="b-snap-btn">격자 스냅 (<input type="number" id="b-snap-thresh" value="25" min="1" max="500" style="width:46px;padding:2px 4px">ms)</button>
+                    <span class="lbl">스냅 임계</span>
+                    <input type="number" id="b-snap-thresh" value="25" min="1" max="500" style="width:60px">
+                    <span class="lbl">ms</span>
+                    <button class="ctl" id="b-snap-btn">격자 스냅</button>
                     <button class="ctl" id="b-undo-btn">↩ 실행취소</button>
                 </div>
                 <div class="row" style="margin-top:8px">
@@ -290,6 +294,7 @@ input[type=number]{ width:80px; }
             <div><div class="v" id="n-count2">0</div><div class="k">전체 노트</div></div>
             <div><div class="v" style="color:#5ee0ff" id="n-a-count">0</div><div class="k">Mode A (키보드)</div></div>
             <div><div class="v" style="color:#b07cff" id="n-b-count">0</div><div class="k">Mode B (타임라인)</div></div>
+            <div><div class="v" style="color:#ff7caa" id="n-c-count">0</div><div class="k">Mode C (클릭)</div></div>
         </div>
         <div class="hint">
             내보내기는 <b>songs.js의 objects 배열</b>에 바로 붙여넣기 가능한 형식입니다.
@@ -680,6 +685,7 @@ function updateStats(){
     const total=notes.length;
     const a=notes.filter(n=>n.src==='a'||!n.src).length;
     const b=notes.filter(n=>n.src==='b').length;
+    const c=notes.filter(n=>n.src==='c').length;
     const taps=notes.filter(n=>n.type==='tap').length;
     document.getElementById('n-count').textContent=total;
     document.getElementById('n-tap').textContent=taps;
@@ -687,6 +693,7 @@ function updateStats(){
     document.getElementById('n-count2').textContent=total;
     document.getElementById('n-a-count').textContent=a;
     document.getElementById('n-b-count').textContent=b;
+    document.getElementById('n-c-count').textContent=c;
 }
 
 // ════════════════════════════════════════════════════
@@ -920,12 +927,12 @@ document.getElementById('b-snap-btn').onclick=()=>{
 // ════════════════════════════════════════════════════
 document.getElementById('export-btn').onclick=()=>{
     if(!notes.length){ alert('기록된 노트가 없습니다.'); return; }
-    // Convert to songs.js format: {t, nx, ny, type, dur}
+    // Convert to songs.js format: {t, x, y, type, dur}  (game reads o.x / o.y in buildObjects)
     const objects=notes.map(n=>{
         const t=Math.round(effT(n)*1000)/1000;
-        const nx=Math.round((n.nx||0.5)*1000)/1000;
-        const ny=0.5;
-        const obj={t, nx, ny, type:n.type||'tap'};
+        const x=Math.round((n.nx||0.5)*1000)/1000;
+        const y=0.5;
+        const obj={t, x, y, type:n.type||'tap'};
         if(n.type==='hold'&&n.dur>0) obj.dur=Math.round(n.dur*1000)/1000;
         return obj;
     });
