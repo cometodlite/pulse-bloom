@@ -826,7 +826,7 @@ const pointers=new Map();   // id -> {x,y, obj?}
 let autoCursor={x:0,y:0, has:false};
 let cursor={x:0,y:0, on:false};   // real pointer position, for hover mode
 
-const HIT={ perfect:75, good:155, miss:200 }; // ms
+const HIT={ perfect:80, good:170, miss:270 }; // ms
 
 let captions=[];
 function getPhase(t, sections){
@@ -860,23 +860,53 @@ function canvasPos(e){
     const r=cv.getBoundingClientRect();
     return { x:e.clientX-r.left, y:e.clientY-r.top };
 }
-cv.addEventListener('pointerdown', e=>{
+// Touch events — more reliable than pointerdown on iOS for rapid taps
+cv.addEventListener('touchstart', e=>{
     if(!running||auto) return;
     e.preventDefault();
-    const {x,y}=canvasPos(e);
-    onDown(e.pointerId,x,y);
-}, {passive:false});
-cv.addEventListener('pointermove', e=>{
+    for(const t of e.changedTouches){
+        const {x,y}=canvasPos(t);
+        onDown('t'+t.identifier, x, y);
+    }
+},{passive:false});
+cv.addEventListener('touchmove', e=>{
     if(!running||auto) return;
+    e.preventDefault();
+    for(const t of e.changedTouches){
+        const {x,y}=canvasPos(t);
+        cursor.x=x; cursor.y=y; cursor.on=true;
+        const p=pointers.get('t'+t.identifier); if(!p) continue;
+        p.x=x; p.y=y;
+    }
+},{passive:false});
+function touchUp(e){
+    for(const t of e.changedTouches){
+        const p=pointers.get('t'+t.identifier);
+        if(p && p.obj) finalizeHold(p.obj, songTime());
+        pointers.delete('t'+t.identifier);
+    }
+}
+cv.addEventListener('touchend', touchUp);
+cv.addEventListener('touchcancel', touchUp);
+// Mouse / stylus (non-touch pointer events)
+cv.addEventListener('pointerdown', e=>{
+    if(!running||auto||e.pointerType==='touch') return;
+    e.preventDefault();
     const {x,y}=canvasPos(e);
-    cursor.x=x; cursor.y=y; cursor.on=true;   // for hover mode
+    onDown(e.pointerId, x, y);
+},{passive:false});
+cv.addEventListener('pointermove', e=>{
+    if(!running||auto||e.pointerType==='touch') return;
+    const {x,y}=canvasPos(e);
+    cursor.x=x; cursor.y=y; cursor.on=true;
     const p=pointers.get(e.pointerId); if(!p) return;
     p.x=x; p.y=y;
-}, {passive:false});
+},{passive:false});
 cv.addEventListener('pointerleave', ()=>{ cursor.on=false; });
 function up(e){
+    if(e.pointerType==='touch') return;
     const p=pointers.get(e.pointerId);
-    if(p && p.obj){ finalizeHold(p.obj, songTime()); }
+    if(p && p.obj) finalizeHold(p.obj, songTime());
     pointers.delete(e.pointerId);
 }
 cv.addEventListener('pointerup', up);
@@ -893,7 +923,7 @@ function onDown(id,x,y){
         const p=P(o);
         const onLine=true;
         const dist=onLine ? Math.abs(x-p.x) : Math.hypot(x-p.x,y-p.y);
-        if(dist>R*(onLine?2.2:1.75)) continue;
+        if(dist>R*(onLine?3.2:1.75)) continue;
         if(dt<bd){ bd=dt; best=o; }
     }
     if(!best){ pointers.set(id,{x,y}); return; }
@@ -1082,7 +1112,7 @@ function update(now){
                 const p=P(o);
                 const onLn=true;
                 const hd=onLn?Math.abs(cursor.x-p.x):Math.hypot(cursor.x-p.x,cursor.y-p.y);
-                if(hd <= R*(onLn?2.2:1.75)){
+                if(hd <= R*(onLn?3.2:1.75)){
                     const bd=Math.abs(now-o.t)*1000;
                     const j = bd<=HIT.perfect?'perfect': bd<=HIT.good?'good':'miss';
                     if(j!=='miss'){
