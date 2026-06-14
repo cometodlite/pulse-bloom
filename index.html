@@ -231,6 +231,26 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
 .spinner { width:26px; height:26px; border:3px solid rgba(176,124,255,.2);
     border-top-color:#b07cff; border-radius:50%; animation:spin .8s linear infinite; margin:14px auto 0; }
 @keyframes spin { to { transform:rotate(360deg); } }
+
+/* mode selection cards in ov-mods */
+.mode-cards { display:flex; gap:10px; }
+.mode-card { flex:1; padding:14px 10px; border-radius:14px; cursor:pointer;
+    border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.035);
+    color:#9a8fb5; font-family:inherit; text-align:center; transition:.15s; }
+.mode-card:hover { border-color:#b07cff; background:rgba(176,124,255,.08); color:#d4c8f0; }
+.mode-card.sel { border-color:#b07cff; background:rgba(176,124,255,.14); color:#fff; }
+.mode-card.sel:hover { background:rgba(176,124,255,.22); }
+.mc-icon { font-size:1.5rem; margin-bottom:5px; }
+.mc-name { font-weight:700; font-size:.86rem; letter-spacing:.06em; }
+.mc-desc { font-size:.66rem; color:#5b4f72; margin-top:4px; line-height:1.35; }
+.mode-card.sel .mc-desc { color:#8a7da6; }
+
+/* in-game modifier badges (shown below auto-badge) */
+.mod-badge { display:inline-block; margin-top:4px; font-size:.7rem; letter-spacing:.15em;
+    border-radius:20px; padding:2px 10px; opacity:0; }
+.mod-badge.on { opacity:1; }
+#crowning-badge { color:#b07cff; border:1px solid rgba(176,124,255,.5); }
+#random-badge   { color:#ffd166; border:1px solid rgba(255,209,102,.5); }
 </style>
 </head>
 <body>
@@ -243,6 +263,8 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
             <div id="score">0</div>
             <div id="acc">100.00%</div>
             <div id="auto-badge">● AUTO PLAY</div>
+            <div class="mod-badge" id="crowning-badge">👑 CROWNING</div>
+            <div class="mod-badge" id="random-badge">🎲 RANDOM</div>
         </div>
         <div class="right">
             <div id="combo">0</div>
@@ -271,6 +293,7 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
     <!-- START / SETUP -->
     <div class="overlay hidden" id="ov-start">
         <button class="back-btn" id="back-songs">← 곡 선택</button>
+        <button class="settings-btn" id="btn-mods-start" style="right:110px">🎮 모드</button>
         <button class="settings-btn" id="btn-settings-start">⚙ 설정</button>
         <div class="song" id="song-title">— LOADING —</div>
         <div class="song-sub" id="song-sub"></div>
@@ -287,13 +310,6 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
                     <span class="sval" id="approach-val">1.2초</span>
                 </div>
             </div>
-            <div class="toggle" id="auto-toggle">
-                <div>
-                    <div class="t-lbl">컴퓨터 플레이 (오토)</div>
-                    <div class="t-sub">컴퓨터가 자동으로 완벽하게 플레이</div>
-                </div>
-                <div class="switch"></div>
-            </div>
             <button class="play-btn" id="play-btn">▶ 시작</button>
         </div>
 
@@ -305,6 +321,43 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
             링이 원에 딱 맞을 때 <b>그 자리를 누르세요</b>.<br>
             <b>속이 빈 원</b>은 누른 채로 <b>꾹 홀드</b> — 잘 누를수록 꽃이 핍니다.<br>
             <span style="color:#6f6388">PC: 마우스 · 모바일: 터치(멀티터치 지원)</span>
+        </div>
+    </div>
+
+    <!-- MODS / GAME MODE -->
+    <div class="overlay hidden" id="ov-mods">
+        <button class="back-btn" id="back-mods">← 뒤로</button>
+        <div class="title" style="font-size:clamp(1.6rem,5vw,2.4rem)">게임 모드</div>
+        <div class="panel">
+            <div class="row">
+                <span class="lbl">모드 선택</span>
+                <div class="mode-cards" id="mode-cards">
+                    <button class="mode-card sel" data-mode="raining">
+                        <div class="mc-icon">🌧</div>
+                        <div class="mc-name">레이닝</div>
+                        <div class="mc-desc">노트가 위에서 아래로 떨어집니다. 판정선에서 탭!</div>
+                    </button>
+                    <button class="mode-card" data-mode="crowning">
+                        <div class="mc-icon">👑</div>
+                        <div class="mc-name">크라우닝</div>
+                        <div class="mc-desc">노트 위에서 링이 수축합니다. 링이 딱 맞을 때 탭!</div>
+                    </button>
+                </div>
+            </div>
+            <div class="toggle" id="auto-toggle">
+                <div>
+                    <div class="t-lbl">오토 플레이</div>
+                    <div class="t-sub">컴퓨터가 자동으로 완벽하게 플레이</div>
+                </div>
+                <div class="switch"></div>
+            </div>
+            <div class="toggle" id="random-toggle">
+                <div>
+                    <div class="t-lbl">랜덤 채보</div>
+                    <div class="t-sub">노트 X 위치를 무작위로 섞어서 플레이</div>
+                </div>
+                <div class="switch"></div>
+            </div>
         </div>
     </div>
 
@@ -806,6 +859,8 @@ let objects=[];
 let diff='normal';
 let APPROACH=1.2;        // seconds telegraph
 let auto=false;
+let gameMode='raining';   // 'raining' | 'crowning'
+let randomMode=false;
 const LEAD_EXTRA=1.0;    // countdown seconds before music after spawn lead
 let leadIn=0;
 
@@ -852,8 +907,17 @@ function buildObjects(){
         };
     });
     captions = chart.captions || [];
+    if(randomMode){
+        const nxArr=objects.map(o=>o.nx);
+        for(let i=nxArr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [nxArr[i],nxArr[j]]=[nxArr[j],nxArr[i]]; }
+        objects.forEach((o,i)=>{ o.nx=nxArr[i]; o.zx=nxArr[i]; });
+    }
 }
-function P(o){ return {x:o.nx*W, y:H*JLINE}; }
+function P(o){
+    return gameMode==='crowning'
+        ? {x:o.nx*W, y:o.ny*H}
+        : {x:o.nx*W, y:H*JLINE};
+}
 
 // ════════════════ INPUT ════════════════
 function canvasPos(e){
@@ -1055,6 +1119,8 @@ function startGame(){
     document.getElementById('ov-start').classList.add('hidden');
     document.getElementById('ov-result').classList.add('hidden');
     document.getElementById('auto-badge').classList.toggle('on', auto);
+    document.getElementById('crowning-badge').classList.toggle('on', gameMode==='crowning');
+    document.getElementById('random-badge').classList.toggle('on', randomMode);
 
     if(ctx.state==='suspended') ctx.resume();
     // fresh source
@@ -1110,7 +1176,7 @@ function update(now){
             // hover mode (PC): cursor resting on a note auto-hits it at the right time, no click
             if(hoverMode && o.state==='approach' && cursor.on && now >= o.t - HIT.perfect/1000){
                 const p=P(o);
-                const onLn=true;
+                const onLn=gameMode!=='crowning';
                 const hd=onLn?Math.abs(cursor.x-p.x):Math.hypot(cursor.x-p.x,cursor.y-p.y);
                 if(hd <= R*(onLn?3.2:1.75)){
                     const bd=Math.abs(now-o.t)*1000;
@@ -1262,7 +1328,7 @@ function drawPulseBloomNote(o,p,appT,now){
 function drawCrowningArrows(now){
     const vis=[];
     for(const o of objects){
-        if(o.phase!=='crowning') continue;
+        if(gameMode!=='crowning' && o.phase!=='crowning') continue;
         if(o.state==='done'||o.state==='wait') continue;
         const dt=o.t-now;
         if(dt < -HIT.miss/1000) continue;
@@ -1333,7 +1399,7 @@ function render(now){
     g.globalCompositeOperation='source-over';
 
     const hasActive=objects.some(o=>o.state!=='wait'&&o.state!=='done');
-    if(hasActive){
+    if(hasActive && gameMode!=='crowning'){
         g.save();
         const jy=H*JLINE;
         for(const o of objects){
@@ -1360,6 +1426,7 @@ function render(now){
     }
 
     drawFollowPoints(now);
+    if(gameMode==='crowning') drawCrowningArrows(now);
 
     // C: next-note hint glows (additive, behind notes)
     g.globalCompositeOperation='lighter';
@@ -1378,7 +1445,9 @@ function render(now){
         if(o.state==='wait'||o.state==='done') continue;
         const dt=o.t-now;
         const appT=Math.max(0,Math.min(1, dt/APPROACH));
-        const p={x:o.nx*W, y:H*JLINE*(1-Math.max(0,appT))};
+        const p=gameMode==='crowning'
+            ? {x:o.nx*W, y:o.ny*H}
+            : {x:o.nx*W, y:H*JLINE*(1-Math.max(0,appT))};
         drawObject(o,p,appT,now);
     }
 
@@ -1418,7 +1487,10 @@ function render(now){
 }
 
 
-function drawObject(o,p,appT,now){ drawRainingNote(o,p,appT,now); }
+function drawObject(o,p,appT,now){
+    if(gameMode==='crowning') drawCrowningNote(o,p,appT,now);
+    else drawRainingNote(o,p,appT,now);
+}
 
 function drawCrowningNote(o,p,appT,now){
     const isHold=o.type==='hold', col=o.color;
@@ -1793,7 +1865,7 @@ function toSongSelect(){
     if(paused){ paused=false; try{ ctx.resume(); }catch(e){} }
     stopAudio(); stopPreview(); running=false;
     document.getElementById('pause-btn').classList.remove('active');
-    ['ov-result','ov-start','ov-settings','ov-title','ov-pause'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+    ['ov-result','ov-start','ov-settings','ov-title','ov-pause','ov-mods'].forEach(id=>document.getElementById(id).classList.add('hidden'));
     document.getElementById('ov-songs').classList.remove('hidden');
 }
 document.getElementById('back-songs').addEventListener('click', toSongSelect);
@@ -1825,6 +1897,30 @@ document.getElementById('back-settings').addEventListener('click', ()=>{
     document.getElementById('ov-settings').classList.add('hidden');
     document.getElementById('ov-'+settingsOrigin).classList.remove('hidden');
 });
+
+// mods panel navigation
+function openMods(){
+    document.getElementById('ov-start').classList.add('hidden');
+    document.getElementById('ov-mods').classList.remove('hidden');
+}
+function closeMods(){
+    document.getElementById('ov-mods').classList.add('hidden');
+    document.getElementById('ov-start').classList.remove('hidden');
+}
+document.getElementById('btn-mods-start').addEventListener('click', openMods);
+document.getElementById('back-mods').addEventListener('click', closeMods);
+
+// mode card selection
+document.getElementById('mode-cards').addEventListener('click', e=>{
+    const b=e.target.closest('button[data-mode]'); if(!b) return;
+    document.querySelectorAll('#mode-cards button').forEach(x=>x.classList.remove('sel'));
+    b.classList.add('sel');
+    gameMode=b.dataset.mode;
+});
+
+// random toggle
+const randomT=document.getElementById('random-toggle');
+randomT.addEventListener('click', ()=>{ randomMode=!randomMode; randomT.classList.toggle('on',randomMode); });
 document.getElementById('r-cal').addEventListener('click', e=>{
     const adj=parseInt(e.currentTarget.dataset.adj||'0');
     inputOffset=Math.max(-300,Math.min(300, inputOffset+adj));
@@ -1839,6 +1935,10 @@ window.addEventListener('keydown', e=>{
     if(e.key!=='Escape') return;
     if(running && paused){ resumeGame(); }
     else if(running && !paused){ pauseGame(); }
+    else if(!document.getElementById('ov-mods').classList.contains('hidden')){
+        document.getElementById('ov-mods').classList.add('hidden');
+        document.getElementById('ov-start').classList.remove('hidden');
+    }
     else if(!document.getElementById('ov-settings').classList.contains('hidden')){
         document.getElementById('ov-settings').classList.add('hidden');
         document.getElementById('ov-'+settingsOrigin).classList.remove('hidden');
