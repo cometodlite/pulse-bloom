@@ -134,6 +134,7 @@ input[type=number]{ width:80px; }
     <div class="tab-bar">
         <button class="tab-btn active" id="tab-a" onclick="switchTab('a')">🎵 Mode A — 키보드 탭 기록</button>
         <button class="tab-btn" id="tab-b" onclick="switchTab('b')">📐 Mode B — BPM 타임라인 배치</button>
+        <button class="tab-btn" id="tab-c" onclick="switchTab('c')">🎮 Mode C — 캔버스 직접 클릭</button>
     </div>
 
     <!-- 1. 음악 (공통) -->
@@ -248,6 +249,27 @@ input[type=number]{ width:80px; }
         </div>
     </div>
 
+    <!-- ══ MODE C ══ -->
+    <div id="mode-c-section" style="display:none">
+        <div id="work-c" class="disabled-area">
+            <div class="card">
+                <h2>2C · 캔버스 직접 클릭 기록</h2>
+                <div class="row">
+                    <button class="ctl primary" id="c-play-btn">▶ 재생</button>
+                    <button class="ctl" id="c-stop-btn">■ 처음</button>
+                    <button class="ctl" id="c-undo-btn">↩ 마지막 취소</button>
+                    <span style="font-size:.74rem;color:#8a7da6;margin-left:8px">클릭/탭 위치 = 노트 X 위치 &nbsp;·&nbsp; 클릭 순간 = 노트 타이밍</span>
+                    <span style="margin-left:auto;font-variant-numeric:tabular-nums;font-size:.82rem;color:#b0a0e0" id="c-time-label">0.000s</span>
+                </div>
+                <canvas id="c-canvas" style="width:100%;height:380px;display:block;border-radius:12px;background:#06040d;border:1px solid rgba(255,255,255,.08);cursor:crosshair;touch-action:none;margin-top:10px"></canvas>
+                <div class="hint" style="margin-top:8px">
+                    재생 중 캔버스를 <b>클릭/탭</b>하면 그 순간 + 그 위치에 노트가 기록됩니다.<br>
+                    가로 위치 = 노트 X (0=왼쪽, 1=오른쪽) &nbsp;·&nbsp; <kbd>Backspace</kbd> 또는 ↩ 버튼으로 마지막 노트 취소
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 3. 공통: 검토 & 내보내기 -->
     <div class="card">
         <h2>3 · 검토 & 내보내기</h2>
@@ -315,11 +337,14 @@ function switchTab(t){
     currentTab = t;
     document.getElementById('tab-a').classList.toggle('active', t==='a');
     document.getElementById('tab-b').classList.toggle('active', t==='b');
+    document.getElementById('tab-c').classList.toggle('active', t==='c');
     document.getElementById('mode-a-section').style.display = t==='a' ? '' : 'none';
     document.getElementById('mode-b-section').style.display = t==='b' ? '' : 'none';
+    document.getElementById('mode-c-section').style.display = t==='c' ? '' : 'none';
     selectedNote = null;
     updateSelInfoA(); updateBSelInfo();
     if(t==='b') bRenderLoop();
+    if(t==='c') cRenderLoop();
 }
 
 // ════════════════════════════════════════════════════
@@ -374,6 +399,7 @@ async function loadFile(f){
         transport = 'ready'; curPos = 0;
         document.getElementById('work-a').classList.remove('disabled-area');
         document.getElementById('work-b').classList.remove('disabled-area');
+        document.getElementById('work-c').classList.remove('disabled-area');
         if(!document.getElementById('title').value)
             document.getElementById('title').value = f.name.replace(/\.[^.]+$/,'');
         drawTL();
@@ -399,8 +425,9 @@ function play(){
     if(lead>0){ for(let i=0;i<3;i++) tick(audioStartCtx-(3-i)*0.6, i===2?880:520, 0.14); }
     if(reviewMode) scheduleReviewTicks();
     transport = 'playing';
-    document.getElementById('play-btn').textContent = '⏸ 일시정지';
+    document.getElementById('play-btn').textContent   = '⏸ 일시정지';
     document.getElementById('b-play-btn').textContent = '⏸ 일시정지';
+    document.getElementById('c-play-btn').textContent = '⏸ 일시정지';
     document.getElementById('rec-dot').classList.toggle('on', !reviewMode);
     loopA();
 }
@@ -408,15 +435,17 @@ function pause(){
     if(transport!=='playing') return;
     curPos = Math.max(0,Math.min(duration,songPos()));
     stopSrc(); transport='paused'; reviewMode=false;
-    document.getElementById('play-btn').textContent = '▶ 재생';
+    document.getElementById('play-btn').textContent   = '▶ 재생';
     document.getElementById('b-play-btn').textContent = '▶ 재생';
+    document.getElementById('c-play-btn').textContent = '▶ 재생';
     document.getElementById('rec-dot').classList.remove('on');
     pressing.clear(); updatePads();
 }
 function stop(){
     stopSrc(); transport = buffer?'ready':'idle'; curPos=0; reviewMode=false;
-    document.getElementById('play-btn').textContent = '▶ 재생';
+    document.getElementById('play-btn').textContent   = '▶ 재생';
     document.getElementById('b-play-btn').textContent = '▶ 재생';
+    document.getElementById('c-play-btn').textContent = '▶ 재생';
     document.getElementById('rec-dot').classList.remove('on');
     pressing.clear(); updatePads(); updateSeek(); drawTL();
 }
@@ -522,7 +551,7 @@ const tl=document.getElementById('tl'); const tg=tl.getContext('2d');
 let TLW=800, TLH=170;
 function sizeTL(){ const r=tl.getBoundingClientRect(); const dpr=Math.min(devicePixelRatio||1,2);
     tl.width=r.width*dpr; tl.height=170*dpr; tg.setTransform(dpr,0,0,dpr,0,0); TLW=r.width; TLH=170; }
-window.addEventListener('resize', ()=>{ sizeTL(); drawTL(); bResize(); });
+window.addEventListener('resize', ()=>{ sizeTL(); drawTL(); bResize(); cResize(); });
 sizeTL();
 
 const VIEW_BACK=0.6, VIEW_FWD=2.8;
@@ -609,7 +638,7 @@ window.addEventListener('keydown', e=>{
         if(k==='escape'){ selectedNoteA=null; updateSelInfoA(); drawTL(); return; }
         if(k==='backspace'){ e.preventDefault(); deleteSelectedA(); return; }
     }
-    if(k==='backspace'){ e.preventDefault(); undoA(); return; }
+    if(k==='backspace'){ e.preventDefault(); if(currentTab==='c') cUndoLast(); else undoA(); return; }
     if(transport!=='playing'||reviewMode) return;
     const lane=KEYS.indexOf(k);
     if(lane<0||pressing.has(k)||e.repeat) return;
@@ -1018,9 +1047,152 @@ document.getElementById('cal-apply').onclick=applyCal;
 document.getElementById('cal-close').onclick=closeCal;
 calPad.onclick=calTap;
 
+// ════════════════════════════════════════════════════
+//  MODE C — realtime canvas click recording
+// ════════════════════════════════════════════════════
+const cCv = document.getElementById('c-canvas');
+const cG  = cCv.getContext('2d');
+let CCW=900, CCH=380;
+const C_JLINE = 0.82;
+const C_APPROACH = 1.4; // seconds of fall window shown
+const C_NOTE_R = 10;
+
+function cResize(){
+    const r = cCv.getBoundingClientRect();
+    const dpr = Math.min(devicePixelRatio||1, 2);
+    CCW = r.width; CCH = r.height;
+    cCv.width = CCW*dpr; cCv.height = CCH*dpr;
+    cG.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cDraw();
+}
+
+// ripple feedback on tap
+let cRipples = []; // [{x, y, t, col}]
+
+function cDraw(){
+    cG.clearRect(0, 0, CCW, CCH);
+    cG.fillStyle = '#06040d'; cG.fillRect(0, 0, CCW, CCH);
+
+    const jy = CCH * C_JLINE;
+    const now = transport==='playing' ? songPos() : curPos;
+
+    // vertical lane guides (faint)
+    for(let i=1; i<5; i++){
+        const x = i * CCW/5;
+        cG.strokeStyle = 'rgba(255,255,255,0.04)'; cG.lineWidth = 1;
+        cG.beginPath(); cG.moveTo(x, 0); cG.lineTo(x, CCH); cG.stroke();
+    }
+
+    // judgment line glow
+    const jg = cG.createLinearGradient(0, jy-14, 0, jy+14);
+    jg.addColorStop(0, 'rgba(180,120,255,0)');
+    jg.addColorStop(0.5, 'rgba(180,120,255,0.12)');
+    jg.addColorStop(1, 'rgba(180,120,255,0)');
+    cG.fillStyle = jg; cG.fillRect(0, jy-14, CCW, 28);
+    cG.strokeStyle = 'rgba(255,255,255,0.18)'; cG.lineWidth = 1.5;
+    cG.beginPath(); cG.moveTo(0, jy); cG.lineTo(CCW, jy); cG.stroke();
+
+    // falling notes (within approach window)
+    notes.forEach((n, i) => {
+        const dt = n.t - now;                        // +dt = future, -dt = past
+        if(dt > C_APPROACH || dt < -0.4) return;
+        const appT = Math.max(0, dt / C_APPROACH);  // 1 = at top, 0 = at jline
+        const py = jy * (1 - appT);
+        const px = n.nx * CCW;
+        const col = B_COLORS[i % B_COLORS.length];
+        const fade = dt < 0 ? Math.max(0, 1 + dt/0.4) : 1;
+
+        // tail
+        const tailTop = Math.max(0, py - jy * 0.28);
+        const tg = cG.createLinearGradient(0, tailTop, 0, py);
+        tg.addColorStop(0, col+'00'); tg.addColorStop(1, col+'55');
+        cG.strokeStyle = tg; cG.lineWidth = 3;
+        cG.beginPath(); cG.moveTo(px, tailTop); cG.lineTo(px, py); cG.stroke();
+
+        // circle
+        const rg = cG.createRadialGradient(px, py, 0, px, py, C_NOTE_R*2.2);
+        rg.addColorStop(0, col+'cc'); rg.addColorStop(1, col+'00');
+        cG.globalAlpha = fade;
+        cG.fillStyle = rg; cG.beginPath(); cG.arc(px, py, C_NOTE_R*2.2, 0, Math.PI*2); cG.fill();
+        cG.beginPath(); cG.arc(px, py, C_NOTE_R, 0, Math.PI*2);
+        cG.fillStyle = col+'dd'; cG.fill();
+        cG.strokeStyle = col; cG.lineWidth = 2; cG.stroke();
+        cG.globalAlpha = 1;
+    });
+
+    // ripples
+    const nowMs = performance.now();
+    cRipples = cRipples.filter(r => nowMs - r.t < 420);
+    cRipples.forEach(r => {
+        const age = (nowMs - r.t) / 420;
+        const radius = C_NOTE_R * (1 + age * 3.5);
+        cG.beginPath(); cG.arc(r.x, r.y, radius, 0, Math.PI*2);
+        cG.strokeStyle = r.col + Math.round((1-age)*200).toString(16).padStart(2,'0');
+        cG.lineWidth = 2.5 * (1-age);
+        cG.stroke();
+    });
+
+    // overlay when not playing
+    if(transport !== 'playing'){
+        cG.fillStyle = 'rgba(0,0,0,0.52)'; cG.fillRect(0, 0, CCW, CCH);
+        cG.fillStyle = 'rgba(180,160,255,0.75)';
+        cG.font = 'bold 15px Segoe UI'; cG.textAlign = 'center'; cG.textBaseline = 'middle';
+        cG.fillText('▶ 재생 후 캔버스를 클릭/탭하면 노트가 기록됩니다', CCW/2, CCH/2 - 12);
+        cG.fillStyle = 'rgba(140,120,210,0.5)';
+        cG.font = '12px Segoe UI';
+        cG.fillText('클릭 X 위치 → 노트 레인 위치 (0.0 ~ 1.0)', CCW/2, CCH/2 + 14);
+    }
+
+    document.getElementById('c-time-label').textContent = Math.max(0, now).toFixed(3)+'s';
+}
+
+function cRecord(clientX, clientY){
+    if(transport !== 'playing'){ return; }
+    const r = cCv.getBoundingClientRect();
+    const nx = Math.max(0, Math.min(1, (clientX - r.left) / CCW));
+    const t  = Math.round(songPos() * 1000) / 1000;
+    if(t < 0) return;
+    // ripple at click position
+    const py = (clientY - r.top) * (cCv.height / cCv.clientHeight) / (devicePixelRatio||1);
+    cRipples.push({ x: (clientX - r.left), y: py, t: performance.now(),
+                    col: B_COLORS[notes.length % B_COLORS.length] });
+    notes.push({ t, nx, ny: 0.5, type: 'tap', dur: 0, src: 'c' });
+    notes.sort((a,b) => a.t - b.t);
+    updateStats();
+}
+
+cCv.addEventListener('click', e => cRecord(e.clientX, e.clientY));
+cCv.addEventListener('touchstart', e => {
+    e.preventDefault();
+    for(const t of e.changedTouches) cRecord(t.clientX, t.clientY);
+}, { passive: false });
+
+function cUndoLast(){
+    // remove last Mode C note
+    for(let i = notes.length-1; i >= 0; i--){
+        if(notes[i].src === 'c'){ notes.splice(i,1); updateStats(); return; }
+    }
+}
+
+document.getElementById('c-play-btn').onclick = () => { reviewMode=false; togglePlay(); };
+document.getElementById('c-stop-btn').onclick  = stop;
+document.getElementById('c-undo-btn').onclick  = cUndoLast;
+
+
+let cRafId = 0;
+function cRenderLoop(){
+    if(currentTab !== 'c'){ cRafId=0; return; }
+    if(transport==='playing'){
+        const now = songPos();
+        if(now < 0 || now > duration){ /* wait */ }
+    }
+    cDraw();
+    cRafId = requestAnimationFrame(cRenderLoop);
+}
+
 // ── init ──
 updateStats();
-window.addEventListener('load', ()=>{ sizeTL(); bResize(); bDrawTimeline(); });
+window.addEventListener('load', ()=>{ sizeTL(); bResize(); bDrawTimeline(); cResize(); });
 </script>
 </body>
 </html>
