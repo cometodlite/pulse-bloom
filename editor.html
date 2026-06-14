@@ -364,12 +364,17 @@ let fileName = '', duration = 0;
 let KEYS = ['d','f','j','k'];
 const HOLD_THRESH = 0.18;
 let offsetMs = 0;
+let pendingTicks = [];
 
 function ensureCtx(){
     if(!ctx) ctx = new (window.AudioContext||window.webkitAudioContext)();
     if(ctx.state==='suspended') ctx.resume();
 }
 function stopSrc(){ try{ srcNode && srcNode.stop(); }catch(e){} srcNode=null; }
+function cancelTicks(){
+    for(const o of pendingTicks){ try{ o.stop(); }catch(e){} }
+    pendingTicks = [];
+}
 function songPos(){ if(transport!=='playing') return curPos;
     return playStartPos + (ctx.currentTime - audioStartCtx)*speed; }
 
@@ -380,6 +385,8 @@ function tick(ctxTime, freq, vol=0.12, dur=0.04){
     g.gain.setValueAtTime(vol, ctxTime);
     g.gain.exponentialRampToValueAtTime(0.0001, ctxTime+dur);
     o.start(ctxTime); o.stop(ctxTime+dur+0.01);
+    pendingTicks.push(o);
+    o.onended = ()=>{ const i=pendingTicks.indexOf(o); if(i!==-1) pendingTicks.splice(i,1); };
 }
 function effT(n){ return Math.max(0, n.t - offsetMs/1000); }
 
@@ -441,7 +448,7 @@ function play(){
 function pause(){
     if(transport!=='playing') return;
     curPos = Math.max(0,Math.min(duration,songPos()));
-    stopSrc(); transport='paused'; reviewMode=false;
+    stopSrc(); cancelTicks(); transport='paused'; reviewMode=false;
     document.getElementById('play-btn').textContent   = '▶ 재생';
     document.getElementById('b-play-btn').textContent = '▶ 재생';
     document.getElementById('c-play-btn').textContent = '▶ 재생';
@@ -449,7 +456,7 @@ function pause(){
     pressing.clear(); updatePads();
 }
 function stop(){
-    stopSrc(); transport = buffer?'ready':'idle'; curPos=0; reviewMode=false;
+    stopSrc(); cancelTicks(); transport = buffer?'ready':'idle'; curPos=0; reviewMode=false;
     document.getElementById('play-btn').textContent   = '▶ 재생';
     document.getElementById('b-play-btn').textContent = '▶ 재생';
     document.getElementById('c-play-btn').textContent = '▶ 재생';
