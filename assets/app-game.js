@@ -19,12 +19,15 @@ function buildObjects(){
     const raw = chart.objects;
     const chartShift = (chart.offset||0) / 1000;
     const sections = chart.sections || [];
+    // If chart only has the default y:0.5, spread notes across screen for crowning mode
+    const hasVariedY = raw.some(o => Math.abs((o.y||0.5)-0.5) > 0.05);
     objects = raw.map((o,i)=>{
         const t = o.t + chartShift;
         const phase = getPhase(t, sections);
+        const ny = hasVariedY ? (o.y||0.5) : zoneToY(o.x);
         return {
             t, type:o.type, dur:o.dur||0,
-            nx:o.x, ny:o.y, hint:o.hint||null,
+            nx:o.x, ny, hint:o.hint||null,
             phase,
             zx: phase==='blooming' ? snapToZone(o.x) : o.x,
             color:COLORS[i%COLORS.length],
@@ -116,7 +119,7 @@ function kbPos(){
     return {x:cv.width/2, y:cv.height/2};
 }
 window.addEventListener('keydown', e=>{
-    if(!running||auto||paused) return;
+    if(!running||auto||paused||glitchState) return;
     if(e.ctrlKey||e.metaKey||e.altKey||KB_SKIP.has(e.key)||e.repeat) return;
     const kid='k'+e.code;
     if(pointers.has(kid)) return;
@@ -133,6 +136,7 @@ window.addEventListener('keyup', e=>{
 });
 
 function onDown(id,x,y){
+    if(glitchState){ pointers.set(id,{x,y}); return; }
     const now=songTime();
     hitSound();
     let best=null,bd=Infinity;
@@ -380,7 +384,7 @@ function update(now){
                     }
                 }
             }
-            if((o.state==='approach') && now > o.t + HIT.miss/1000){
+            if((o.state==='approach') && now > o.t + HIT.miss/1000 && !glitchState){
                 const p=P(o);
                 o.state='done';
                 if(o.type==='fake'){
@@ -803,33 +807,39 @@ function processChartEvent(ev, now){
 }
 
 function doRewind(ev, now){
-    if(!ctx||!audioBuffer||!srcNode) return;
+    if(!ctx||!audioBuffer) return;
     const glitchDur=ev.glitchDur||2.0;
     const rewindTo=ev.to;
-    const resumeWebTime=ctx.currentTime+glitchDur;
+    // leadIn: approach window AFTER glitch so notes are visible before audio hits
+    const leadIn=APPROACH/speedMod;
+    const glitchEndWT=ctx.currentTime+glitchDur;
+    const audioWT=glitchEndWT+leadIn;
 
-    // Reset objects in [rewindTo - glitchDur, now] back to wait
-    const reapproachFrom=rewindTo-glitchDur*speedMod;
+    // audioStart: makes songTime()=rewindTo exactly when ctx.currentTime=audioWT
+    // At glitch end (ctx.currentTime=glitchEndWT): songTime = rewindTo - APPROACH (notes just enter screen)
+    audioStart=audioWT-(rewindTo+inputOffset/1000)/speedMod;
+
+    // Reset objects from rewindTo onwards so they re-approach after glitch
     objects.forEach(o=>{
-        if(o.t>=reapproachFrom && o.t<=now+0.1){
+        if(o.t>=rewindTo && o.t<=now+0.1){
             o.state='wait'; o.headJudge=null; o.holdEnd=0; o.lastTick=0; o.hoverHeld=false;
         }
     });
 
-    // Rewind event index so events in [rewindTo, now] can re-fire
+    // Event index: re-fire events after rewindTo
     nextEventIdx=chartEvents.findIndex(e=>e.t>rewindTo);
     if(nextEventIdx===-1) nextEventIdx=chartEvents.length;
 
-    // Restart audio at rewindTo after glitch
+    // Restart audio scheduled to start at audioWT
     try{ srcNode.stop(); }catch(e){}
     srcNode=ctx.createBufferSource();
     srcNode.buffer=audioBuffer;
     srcNode.connect(musicGain);
     srcNode.playbackRate.value=speedMod;
-    srcNode.start(resumeWebTime, rewindTo);
-    audioStart=resumeWebTime - rewindTo/speedMod + inputOffset/1000;
+    srcNode.start(audioWT, rewindTo);
 
-    glitchState={endWebTime:resumeWebTime};
+    // Glitch blocks input + auto-miss until glitch visual ends
+    glitchState={endWebTime:glitchEndWT};
 }
 
 function drawGlitchOverlay(now){
