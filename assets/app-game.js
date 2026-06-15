@@ -783,7 +783,7 @@ function endGame(){
     } else { tl.style.display='none'; cb.style.display='none'; }
 
     const bloomLine = document.getElementById('r-bloom-line');
-    if(!replayMode && !testMode){
+    if(!replayMode && !testMode && !auto){
         const bloomEarned = awardBloom();
         bloomLine.style.display = '';
         document.getElementById('r-bloom').textContent = '+' + bloomEarned;
