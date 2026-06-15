@@ -67,7 +67,7 @@ function saveSettings(){ try{
 const BLOOM_MAX    = 1000;
 const BLOOM_FIRST  = {normal:10, chaotic:20, end:30, torment:40, '???':50};
 const BLOOM_REPEAT = {normal:3,  chaotic:5,  end:10, torment:15, '???':20};
-let progress = {clears:{}, bloom:0, pbs:{}, dailies:{}, achievements:{}};
+let progress = {clears:{}, bloom:0, pbs:{}, dailies:{}, achievements:{}, unlocks:{}};
 
 // ── daily / practice / replay / test ──
 let dailyMode=false, dailyChallenge=null;

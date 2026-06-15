@@ -128,7 +128,9 @@ function buildDifficultyUI(){
             b.innerHTML='⏳ '+meta[0]; b.classList.add('coming-soon'); b.disabled=true;
         } else if(has){
             const cost=SONG.charts[tier]?.bloomCost;
-            b.innerHTML=meta[0]+(cost?` <span style="font-size:.7em;color:#b07cff">🌸${cost}</span>`:'');
+            const unlocked=progress.unlocks?.[SONG.id+'|'+tier];
+            const badge=cost?(unlocked?` <span style="font-size:.65em;color:#5effa0">🔓</span>`:` <span style="font-size:.65em;color:#b07cff">🌸${cost}</span>`):'';
+            b.innerHTML=meta[0]+badge;
             b.style.borderColor=meta[1]; b.style.color=meta[1];
             if(!firstAvail){ firstAvail=tier; b.classList.add('sel'); b.style.color='#fff'; }
         } else {
@@ -155,7 +157,12 @@ function updatePlayBtn(){
     const ch=SONG&&SONG.charts[diff];
     const cost=ch?.bloomCost;
     if(cost){
-        btn.innerHTML=`▶ 시작 &nbsp;<span style="font-size:.82em;color:#b07cff">🌸 -${cost}</span>`;
+        const unlocked=progress.unlocks?.[SONG.id+'|'+diff];
+        if(unlocked){
+            btn.innerHTML=`▶ 시작 &nbsp;<span style="font-size:.75em;color:#5effa0">🔓 해금됨</span>`;
+        } else {
+            btn.innerHTML=`▶ 시작 &nbsp;<span style="font-size:.82em;color:#b07cff">🌸 -${cost}</span>`;
+        }
     } else {
         btn.textContent='▶ 시작';
     }
@@ -269,16 +276,24 @@ autoT.addEventListener('click', ()=>{ auto=!auto; autoT.classList.toggle('on',au
 hoverT.addEventListener('click', ()=>{ hoverMode=!hoverMode; hoverT.classList.toggle('on',hoverMode); saveSettings(); });
 
 document.getElementById('play-btn').addEventListener('click', ()=>{
-    if(diff==='???'){
-        const cost=(SONG.charts['???']?.bloomCost)||50;
-        if(progress.bloom<cost){
-            alert(`🌸 블룸이 부족합니다.\n??? 채보는 ${cost} 블룸이 필요합니다.\n현재: ${progress.bloom} 블룸`);
-            return;
+    const ch=SONG&&SONG.charts[diff];
+    const cost=ch?.bloomCost;
+    if(cost){
+        const unlockKey=SONG.id+'|'+diff;
+        if(!progress.unlocks?.[unlockKey]){
+            // 최초 1회 구매
+            if(progress.bloom<cost){
+                alert(`🌸 블룸이 부족합니다.\n??? 채보는 ${cost} 블룸이 필요합니다.\n현재: ${progress.bloom} 블룸`);
+                return;
+            }
+            if(!confirm(`🌸 ${cost} 블룸을 소모하여 해금합니다.\n현재: ${progress.bloom} 블룸\n\n한 번 해금하면 이후엔 무료로 플레이할 수 있습니다.\n\n??? 채보를 해금하시겠습니까?`)) return;
+            progress.bloom=Math.max(0,progress.bloom-cost);
+            if(!progress.unlocks) progress.unlocks={};
+            progress.unlocks[unlockKey]=true;
+            saveProgress();
+            document.getElementById('title-bloom-val').textContent=progress.bloom;
+            updatePlayBtn();
         }
-        if(!confirm(`🌸 ${cost} 블룸을 소모합니다.\n현재: ${progress.bloom} 블룸\n\n??? 채보를 시작하시겠습니까?`)) return;
-        progress.bloom=Math.max(0,progress.bloom-cost);
-        saveProgress();
-        document.getElementById('title-bloom-val').textContent=progress.bloom;
     }
     startGame();
 });

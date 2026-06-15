@@ -11,6 +11,7 @@ function loadProgress(){ try{
         progress.pbs          = p.pbs||{};
         progress.dailies      = p.dailies||{};
         progress.achievements = p.achievements||{};
+        progress.unlocks      = p.unlocks||{};
     }
 }catch(e){} }
 function saveProgress(){ try{
