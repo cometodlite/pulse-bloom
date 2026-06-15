@@ -308,3 +308,48 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
 .daily-done .sc-title::after { content:' ✓'; color:#5effa0; font-size:.8em; }
 /* practice mode */
 #practice-row { display:none; }
+
+/* ═══════════════════════════════════════════════
+   RESPONSIVE — mobile first, desktop override
+   ═══════════════════════════════════════════════ */
+
+/* 모바일 (≤767px): 현재 스타일 그대로 유지 */
+@media (max-width: 767px) {
+    #pause-btn { font-size:1.1rem; padding:5px 16px; }
+}
+
+/* 데스크탑 / PC / 노트북 (≥768px) */
+@media (min-width: 768px) {
+    /* HUD */
+    #hud { padding:24px 36px; }
+    #score { font-size:2.6rem; }
+    #acc   { font-size:.92rem; }
+    #combo { font-size:2rem; }
+    .mod-badge { font-size:.75rem; padding:3px 13px; }
+    #auto-badge { font-size:.75rem; padding:3px 13px; }
+    #timing-live { font-size:.88rem; }
+
+    /* 오버레이 패널 */
+    .panel { width:min(540px, 78vw); gap:22px; }
+    .song-list { width:min(580px, 78vw); }
+    .ach-grid { max-width:560px; }
+    .igcal-box { width:min(500px, 78vw); padding:34px; }
+
+    /* 버튼 크기 */
+    .seg button { padding:13px 0; font-size:.96rem; }
+    .seg.diff button { font-size:.78rem; padding:11px 6px; }
+    .play-btn { font-size:1.22rem; padding:18px; }
+    .ghost { padding:14px 32px; font-size:.96rem; }
+
+    /* 일시정지 버튼 */
+    #pause-btn { font-size:1.5rem; padding:8px 28px; top:20px; }
+
+    /* 결과 화면 */
+    #grade { font-size:clamp(6rem,14vw,9rem); }
+    .r-grid .v { font-size:1.75rem; }
+    .r-grid { gap:32px; }
+
+    /* 곡 카드 */
+    .song-card { padding:20px 24px; }
+    .sc-title { font-size:1.38rem; }
+}
