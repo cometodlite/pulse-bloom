@@ -815,14 +815,14 @@ function doRewind(ev, now){
     if(!ctx||!audioBuffer) return;
     const glitchDur=ev.glitchDur||2.0;
     const rewindTo=ev.to;
-    // leadIn: approach window AFTER glitch so notes are visible before audio hits
-    const leadIn=APPROACH/speedMod;
     const glitchEndWT=ctx.currentTime+glitchDur;
-    const audioWT=glitchEndWT+leadIn;
 
-    // audioStart: makes songTime()=rewindTo exactly when ctx.currentTime=audioWT
-    // At glitch end (ctx.currentTime=glitchEndWT): songTime = rewindTo - APPROACH (notes just enter screen)
-    audioStart=audioWT-(rewindTo+inputOffset/1000)/speedMod;
+    // Audio starts exactly at glitch end, from (rewindTo - APPROACH) in the song.
+    // So at glitch end: songTime = rewindTo - APPROACH → notes at rewindTo are at screen top.
+    // APPROACH seconds later: songTime = rewindTo → those notes hit the judgment line.
+    // No silence gap — music plays while notes fall.
+    const audioOffset=Math.max(0, rewindTo-APPROACH);
+    audioStart=glitchEndWT-(audioOffset+inputOffset/1000)/speedMod;
 
     // Reset objects from rewindTo onwards so they re-approach after glitch
     objects.forEach(o=>{
@@ -835,13 +835,13 @@ function doRewind(ev, now){
     nextEventIdx=chartEvents.findIndex(e=>e.t>rewindTo);
     if(nextEventIdx===-1) nextEventIdx=chartEvents.length;
 
-    // Restart audio scheduled to start at audioWT
+    // Restart audio: begins at glitch end, plays from audioOffset
     try{ srcNode.stop(); }catch(e){}
     srcNode=ctx.createBufferSource();
     srcNode.buffer=audioBuffer;
     srcNode.connect(musicGain);
     srcNode.playbackRate.value=speedMod;
-    srcNode.start(audioWT, rewindTo);
+    srcNode.start(glitchEndWT, audioOffset);
 
     // Glitch blocks input + auto-miss until glitch visual ends
     glitchState={endWebTime:glitchEndWT};
