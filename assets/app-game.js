@@ -24,7 +24,7 @@ function buildObjects(){
     objects = raw.map((o,i)=>{
         const t = o.t + chartShift;
         const phase = getPhase(t, sections);
-        const ny = hasVariedY ? (o.y||0.5) : zoneToY(o.x);
+        const ny = hasVariedY ? (o.y||0.5) : crownToY(i);
         return {
             t, type:o.type, dur:o.dur||0,
             nx:o.x, ny, hint:o.hint||null,

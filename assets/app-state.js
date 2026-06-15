@@ -82,9 +82,9 @@ const JLINE_BASE=0.82;
 let dynJLINE=0.82;  // mutable for ??? jline_move events
 const BLOOM_ZONES=[0.12, 0.30, 0.50, 0.70, 0.88];
 function snapToZone(x){ return BLOOM_ZONES.reduce((b,z)=>Math.abs(x-z)<Math.abs(x-b)?z:b); }
-// Crowning y positions per x-column (for charts that only have y:0.5)
-const ZONE_Y={0.12:0.22, 0.30:0.55, 0.50:0.35, 0.70:0.65, 0.88:0.78};
-function zoneToY(x){ return ZONE_Y[snapToZone(x)]||0.5; }
+// Crowning y positions for charts with uniform y:0.5 — cycle by note index for 2D spread
+const CROWN_YS=[0.20,0.65,0.38,0.80,0.28,0.55,0.42,0.72,0.18,0.60,0.35,0.82,0.25,0.50,0.75];
+function crownToY(i){ return CROWN_YS[i%CROWN_YS.length]; }
 let objects=[];
 let diff='normal';
 let APPROACH=1.2;

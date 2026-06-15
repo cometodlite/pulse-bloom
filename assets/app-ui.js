@@ -84,9 +84,10 @@ function buildSongList(){
     SONGS.filter(s=>s.id!=='__test__').forEach(s=>{
         const card=document.createElement('div'); card.className='song-card';
         const soon=s.comingSoon||[];
-        const diffs=Object.keys(s.charts).map(d=>{
+        const diffs=Object.keys(s.charts).filter(d=>!soon.includes(d)).map(d=>{
             const m=DIFF_META[d]||[d.toUpperCase(),'#fff'];
-            return '<span class="dchip" style="color:'+m[1]+'">'+m[0]+' '+s.charts[d].level+'</span>';
+            const lv=d==='???' ? '???' : s.charts[d].level;
+            return '<span class="dchip" style="color:'+m[1]+'">'+m[0]+' '+lv+'</span>';
         }).join('')
         + soon.map(d=>{
             const m=DIFF_META[d]||[d.toUpperCase(),'#888'];
@@ -143,7 +144,7 @@ function buildDifficultyUI(){
 }
 function updateLevelLabel(){
     const ch=SONG.charts[diff]; const el=document.getElementById('diff-level');
-    if(ch&&el) el.textContent='· Lv.'+ch.level;
+    if(ch&&el) el.textContent= diff==='???' ? '· Lv.???' : '· Lv.'+ch.level;
 }
 function applyDiffApproach(){
     const ch=SONG&&SONG.charts[diff];
