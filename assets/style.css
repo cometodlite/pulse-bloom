@@ -271,7 +271,7 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
 
 #hidden-badge { color:#ff8fd0; border:1px solid rgba(255,143,208,.5); }
 #speed-badge  { color:#ffa07a; border:1px solid rgba(255,160,122,.5); }
-#replay-badge { color:#b07cff; border:1px solid rgba(176,124,255,.5); }
+#replay-badge { color:#b07cff; border:1px solid rgba(176,124,255,.5); display:block; }
 /* combo pop */
 @keyframes comboPop { 0%{transform:scale(1)} 35%{transform:scale(1.26)} 100%{transform:scale(1)} }
 .combo-pop { animation:comboPop .18s ease-out forwards; }
