@@ -103,6 +103,35 @@ function up(e){
 cv.addEventListener('pointerup', up);
 cv.addEventListener('pointercancel', up);
 
+// 키보드: 어떤 키든 best-timed 노트 타격 (얼불춤 스타일)
+const KB_SKIP = new Set(['Escape','Tab','F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12']);
+function kbPos(){
+    const now=songTime(); let best=null, bd=Infinity;
+    for(const o of objects){
+        if(o.state==='done'||o.state==='held') continue;
+        const dt=Math.abs(o.t-now)*1000;
+        if(dt<bd){ bd=dt; best=o; }
+    }
+    if(best){ const p=P(best); return {x:p.x,y:p.y}; }
+    return {x:cv.width/2, y:cv.height/2};
+}
+window.addEventListener('keydown', e=>{
+    if(!running||auto||paused) return;
+    if(e.ctrlKey||e.metaKey||e.altKey||KB_SKIP.has(e.key)||e.repeat) return;
+    const kid='k'+e.code;
+    if(pointers.has(kid)) return;
+    e.preventDefault();
+    const {x,y}=kbPos();
+    onDown(kid,x,y);
+});
+window.addEventListener('keyup', e=>{
+    if(!running||auto) return;
+    const kid='k'+e.code;
+    const p=pointers.get(kid);
+    if(p&&p.obj) finalizeHold(p.obj,songTime());
+    pointers.delete(kid);
+});
+
 function onDown(id,x,y){
     const now=songTime();
     hitSound();
