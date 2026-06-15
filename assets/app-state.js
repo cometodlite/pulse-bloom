@@ -78,7 +78,8 @@ let testMode=false;
 // ── game data ──
 let SONG=null, SONGS=[];
 const COLORS=['#ff5ea8','#5ee0ff','#b07cff','#ffd166','#5effa0'];
-const JLINE=0.82;
+const JLINE_BASE=0.82;
+let dynJLINE=0.82;  // mutable for ??? jline_move events
 const BLOOM_ZONES=[0.12, 0.30, 0.50, 0.70, 0.88];
 function snapToZone(x){ return BLOOM_ZONES.reduce((b,z)=>Math.abs(x-z)<Math.abs(x-b)?z:b); }
 let objects=[];
@@ -104,6 +105,11 @@ let autoCursor={x:0,y:0,has:false};
 let cursor={x:0,y:0,on:false};
 const HIT={perfect:80, good:170, miss:270};
 let captions=[];
+
+// ── ??? chart event system ──
+let chartEvents=[], nextEventIdx=0;
+let glitchState=null;   // {endWebTime} during rewind glitch
+let jlineAnim=null;     // {from,to,startT,dur}
 
 // ── title canvas ──
 const titleCv = document.getElementById('title-cv');

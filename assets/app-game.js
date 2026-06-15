@@ -45,7 +45,7 @@ function buildObjects(){
 function P(o){
     return gameMode==='crowning'
         ? {x:o.nx*W, y:o.ny*H}
-        : {x:o.nx*W, y:H*JLINE};
+        : {x:o.nx*W, y:H*dynJLINE};
 }
 
 // ════════════════ INPUT ════════════════
@@ -150,6 +150,14 @@ function onDown(id,x,y){
     }
     if(!best){ pointers.set(id,{x,y}); return; }
     const p=P(best);
+    // hitting a fake note = MISS penalty
+    if(best.type==='fake'){
+        best.state='done';
+        judgeCount++; judgeSum+=0; cnt.miss++; combo=0;
+        addFloat('FAKE!', p, '#ff5ea8');
+        syncHUD();
+        pointers.set(id,{x,y}); return;
+    }
     const j = bd<=HIT.perfect?'perfect': bd<=HIT.good?'good':'miss';
     if(j!=='miss'){ hitErrors.push((now-best.t)*1000); updateTiming(); }
     if(!auto && !replayMode) replayLog.push({t:now, noteIdx:objects.indexOf(best), judge:j});
@@ -262,6 +270,11 @@ function startGame(){
     if(!replayMode) replayLog=[]; else replayIdx=0;
     document.getElementById('timing-live').textContent='';
     buildObjects(); syncHUD();
+    // ??? event system reset
+    dynJLINE=JLINE_BASE;
+    const _evSrc=SONG.charts[diff];
+    chartEvents=(_evSrc.events||[]).map(e=>({...e})).sort((a,b)=>a.t-b.t);
+    nextEventIdx=0; glitchState=null; jlineAnim=null;
     if(practiceMode && !replayMode && practiceStartSec>0)
         objects.forEach(o=>{ if(o.t<practiceStartSec) o.state='done'; });
 
@@ -316,12 +329,35 @@ function update(now){
         bassPulse += (target-bassPulse)*0.25;
     }
 
+    // ??? event processing
+    if(!glitchState){
+        while(nextEventIdx<chartEvents.length && now>=chartEvents[nextEventIdx].t){
+            processChartEvent(chartEvents[nextEventIdx], now);
+            nextEventIdx++;
+        }
+    }
+    // jline animation
+    if(jlineAnim){
+        const prog=Math.max(0,Math.min(1,(now-jlineAnim.startT)/jlineAnim.dur));
+        dynJLINE=jlineAnim.from+(jlineAnim.to-jlineAnim.from)*prog;
+        if(prog>=1) jlineAnim=null;
+    }
+
     for(const o of objects){
         if(o.state==='done') continue;
         const dt = o.t-now;
         if(o.state==='wait' && dt<=APPROACH){ o.state='approach'; }
 
         if(auto){
+            if(o.type==='fake'){
+                // auto avoids fakes — silent perfect when they expire
+                if(o.state==='approach' && now > o.t+HIT.miss/1000){
+                    o.state='done';
+                    judgeCount++; judgeSum+=1; combo++; if(combo>maxCombo) maxCombo=combo;
+                    score+=scorePerJudge; syncHUD();
+                }
+                continue;
+            }
             if(o.state==='approach' && now>=o.t){
                 const p=P(o);
                 if(o.type==='tap'){ o.state='done'; applyJudge('perfect',p,o.color); addNextGlow(o); }
@@ -347,8 +383,14 @@ function update(now){
             if((o.state==='approach') && now > o.t + HIT.miss/1000){
                 const p=P(o);
                 o.state='done';
-                applyJudge('miss',p,o.color);
-                if(o.type==='hold'){ applyTail('miss',p,o.color); }
+                if(o.type==='fake'){
+                    // successfully avoided — silent perfect
+                    judgeCount++; judgeSum+=1; combo++; if(combo>maxCombo) maxCombo=combo;
+                    score+=scorePerJudge; syncHUD();
+                } else {
+                    applyJudge('miss',p,o.color);
+                    if(o.type==='hold'){ applyTail('miss',p,o.color); }
+                }
             }
             if(o.state==='held' && o.hoverHeld){
                 const p=P(o);
@@ -515,7 +557,7 @@ function render(now){
     const hasActive=objects.some(o=>o.state!=='wait'&&o.state!=='done');
     if(hasActive && gameMode!=='crowning'){
         g.save();
-        const jy=H*JLINE;
+        const jy=H*dynJLINE;
         for(const o of objects){
             if(o.state==='wait'||o.state==='done') continue;
             const dt=o.t-now;
@@ -559,7 +601,7 @@ function render(now){
         const appT=Math.max(0,Math.min(1, dt/APPROACH));
         const p=gameMode==='crowning'
             ? {x:o.nx*W, y:o.ny*H}
-            : {x:o.nx*W, y:H*JLINE*(1-Math.max(0,appT))};
+            : {x:o.nx*W, y:H*dynJLINE*(1-Math.max(0,appT))};
         if(hiddenMode) g.globalAlpha=Math.min(1, appT/0.38);
         drawObject(o,p,appT,now);
         if(hiddenMode) g.globalAlpha=1;
@@ -594,9 +636,17 @@ function render(now){
             g.fillText(c, W/2, H/2);
         }
     }
+
+    // ??? glitch overlay (rewind effect)
+    if(glitchState && ctx && ctx.currentTime < glitchState.endWebTime){
+        drawGlitchOverlay(now);
+    } else if(glitchState && ctx && ctx.currentTime >= glitchState.endWebTime){
+        glitchState=null;
+    }
 }
 
 function drawObject(o,p,appT,now){
+    if(o.type==='fake'){ drawFakeNote(o,p,appT,now); return; }
     if(gameMode==='crowning') drawCrowningNote(o,p,appT,now);
     else drawRainingNote(o,p,appT,now);
 }
@@ -644,7 +694,7 @@ function drawCrowningNote(o,p,appT,now){
 
 function drawRainingNote(o,p,appT,now){
     const col=o.color, isHold=o.type==='hold';
-    const jy=H*JLINE;
+    const jy=H*dynJLINE;
     const dt=o.t-now;
     const missFrac=dt<0?Math.min(1,Math.abs(dt)/(HIT.miss/1000)):0;
     const a=1-missFrac*0.55;
@@ -701,6 +751,114 @@ function drawRainingNote(o,p,appT,now){
         g.font='700 '+Math.round(R*0.42)+'px Segoe UI'; g.textAlign='center'; g.textBaseline='bottom';
         g.fillStyle=hexA('#fff',a*pl); g.fillText(o.hint, p.x, ly);
     }
+}
+
+function drawFakeNote(o,p,appT,now){
+    const col='#ff2244';
+    const jitter=(Math.random()-0.5)*R*0.12;
+    const px=p.x+jitter, py=p.y+jitter;
+    // draw as a ×-marked reddish circle that flickers
+    const flicker=0.7+0.3*Math.sin(now*31+o.t*19);
+    const rg=g.createRadialGradient(px,py,0,px,py,R);
+    rg.addColorStop(0,hexA(col,0.55*flicker)); rg.addColorStop(0.5,hexA(col,0.28*flicker)); rg.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle=rg; g.beginPath(); g.arc(px,py,R,0,Math.PI*2); g.fill();
+    g.beginPath(); g.arc(px,py,R,0,Math.PI*2);
+    g.strokeStyle=hexA(col,0.85*flicker); g.lineWidth=2.5; g.stroke();
+    // × mark
+    g.save(); g.strokeStyle=hexA('#ffffff',0.85*flicker); g.lineWidth=3;
+    const s=R*0.42;
+    g.beginPath(); g.moveTo(px-s,py-s); g.lineTo(px+s,py+s); g.stroke();
+    g.beginPath(); g.moveTo(px+s,py-s); g.lineTo(px-s,py+s); g.stroke();
+    g.restore();
+    // dashed tail for fake notes in raining mode
+    if(gameMode!=='crowning'){
+        const tailLen=Math.min(R*2.5,p.y*0.3);
+        if(p.y>4 && appT>0.02){
+            const tg=g.createLinearGradient(px,py-tailLen,px,py);
+            tg.addColorStop(0,'rgba(0,0,0,0)'); tg.addColorStop(1,hexA(col,0.28*flicker));
+            g.save(); g.strokeStyle=tg; g.lineWidth=2;
+            g.setLineDash([4,4]);
+            g.beginPath(); g.moveTo(px,py-tailLen); g.lineTo(px,py); g.stroke();
+            g.setLineDash([]); g.restore();
+        }
+    }
+}
+
+// ════════════════ ??? EVENT SYSTEM ════════════════
+function processChartEvent(ev, now){
+    if(ev.type==='mode_switch'){
+        gameMode=ev.to;
+        document.getElementById('crowning-badge').classList.toggle('on', gameMode==='crowning');
+    } else if(ev.type==='jline_move'){
+        jlineAnim={from:dynJLINE, to:ev.y, startT:now, dur:1.5};
+    } else if(ev.type==='lane_shuffle'){
+        const upcoming=objects.filter(o=>o.state==='wait'||o.state==='approach');
+        const xs=upcoming.map(o=>o.nx);
+        for(let i=xs.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [xs[i],xs[j]]=[xs[j],xs[i]]; }
+        upcoming.forEach((o,i)=>{ o.nx=xs[i]; });
+        addFloat('SHUFFLE!', {x:W/2,y:H*0.5}, '#ffd166');
+    } else if(ev.type==='rewind'){
+        if(!ev._fired){ ev._fired=true; doRewind(ev, now); }
+    }
+}
+
+function doRewind(ev, now){
+    if(!ctx||!audioBuffer||!srcNode) return;
+    const glitchDur=ev.glitchDur||2.0;
+    const rewindTo=ev.to;
+    const resumeWebTime=ctx.currentTime+glitchDur;
+
+    // Reset objects in [rewindTo - glitchDur, now] back to wait
+    const reapproachFrom=rewindTo-glitchDur*speedMod;
+    objects.forEach(o=>{
+        if(o.t>=reapproachFrom && o.t<=now+0.1){
+            o.state='wait'; o.headJudge=null; o.holdEnd=0; o.lastTick=0; o.hoverHeld=false;
+        }
+    });
+
+    // Rewind event index so events in [rewindTo, now] can re-fire
+    nextEventIdx=chartEvents.findIndex(e=>e.t>rewindTo);
+    if(nextEventIdx===-1) nextEventIdx=chartEvents.length;
+
+    // Restart audio at rewindTo after glitch
+    try{ srcNode.stop(); }catch(e){}
+    srcNode=ctx.createBufferSource();
+    srcNode.buffer=audioBuffer;
+    srcNode.connect(musicGain);
+    srcNode.playbackRate.value=speedMod;
+    srcNode.start(resumeWebTime, rewindTo);
+    audioStart=resumeWebTime - rewindTo/speedMod + inputOffset/1000;
+
+    glitchState={endWebTime:resumeWebTime};
+}
+
+function drawGlitchOverlay(now){
+    g.save();
+    // scanlines
+    g.fillStyle='rgba(0,0,0,0.55)';
+    for(let y=0;y<H;y+=4){ g.fillRect(0,y,W,2); }
+    // horizontal displacement strips
+    const strips=18;
+    for(let i=0;i<strips;i++){
+        const sy=Math.random()*H;
+        const sh=Math.random()*H*0.05+4;
+        const dx=(Math.random()-0.5)*W*0.08;
+        g.drawImage(cv, 0,sy,W,sh, dx,sy,W,sh);
+    }
+    // RGB fringe overlay
+    g.globalCompositeOperation='lighter';
+    g.fillStyle=`rgba(255,0,80,0.08)`; g.fillRect(-6,0,W,H);
+    g.fillStyle=`rgba(0,200,255,0.08)`; g.fillRect(6,0,W,H);
+    g.globalCompositeOperation='source-over';
+    // REWIND text
+    const flash=Math.sin(now*26)>0;
+    if(flash){
+        g.font=`900 ${Math.round(Math.min(W,H)*0.10)}px Segoe UI`;
+        g.textAlign='center'; g.textBaseline='middle';
+        g.fillStyle='rgba(255,60,60,0.92)';
+        g.fillText('◀◀ REWIND', W/2, H/2);
+    }
+    g.restore();
 }
 
 function drawCursor(x,y,col){

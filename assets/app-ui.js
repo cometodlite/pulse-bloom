@@ -127,7 +127,8 @@ function buildDifficultyUI(){
         if(isSoon){
             b.innerHTML='⏳ '+meta[0]; b.classList.add('coming-soon'); b.disabled=true;
         } else if(has){
-            b.textContent=meta[0];
+            const cost=SONG.charts[tier]?.bloomCost;
+            b.innerHTML=meta[0]+(cost?` <span style="font-size:.7em;color:#b07cff">🌸${cost}</span>`:'');
             b.style.borderColor=meta[1]; b.style.color=meta[1];
             if(!firstAvail){ firstAvail=tier; b.classList.add('sel'); b.style.color='#fff'; }
         } else {
@@ -148,6 +149,17 @@ function applyDiffApproach(){
     const ap=document.getElementById('approach'); if(ap){ ap.value=APPROACH;
         document.getElementById('approach-val').textContent=APPROACH.toFixed(1)+'초'; }
 }
+function updatePlayBtn(){
+    const btn=document.getElementById('play-btn');
+    if(!btn) return;
+    const ch=SONG&&SONG.charts[diff];
+    const cost=ch?.bloomCost;
+    if(cost){
+        btn.innerHTML=`▶ 시작 &nbsp;<span style="font-size:.82em;color:#b07cff">🌸 -${cost}</span>`;
+    } else {
+        btn.textContent='▶ 시작';
+    }
+}
 
 // ── song selection ──
 async function selectSong(s){
@@ -162,6 +174,7 @@ async function selectSong(s){
         + (s.isTutorial?'<span class="tutorial-badge">TUTORIAL</span>':'');
     buildDifficultyUI();
     applyDiffApproach();
+    updatePlayBtn();
     const psl=document.getElementById('practice-start');
     if(psl){ psl.max=Math.ceil(s.duration)||300; psl.value=Math.min(parseInt(psl.value)||0, +psl.max); practiceStartSec=+psl.value; }
 
@@ -244,7 +257,7 @@ document.getElementById('seg-diff').addEventListener('click', e=>{
     const b=e.target.closest('button'); if(!b||b.disabled||b.classList.contains('locked')) return;
     document.querySelectorAll('#seg-diff button').forEach(x=>{ x.classList.remove('sel');
         if(!x.classList.contains('locked')){ const m=DIFF_META[x.dataset.d]; if(m) x.style.color=m[1]; } });
-    b.classList.add('sel'); b.style.color='#fff'; diff=b.dataset.d; updateLevelLabel(); applyDiffApproach();
+    b.classList.add('sel'); b.style.color='#fff'; diff=b.dataset.d; updateLevelLabel(); applyDiffApproach(); updatePlayBtn();
 });
 const apSlider=document.getElementById('approach');
 apSlider.addEventListener('input', ()=>{
@@ -255,7 +268,20 @@ const autoT=document.getElementById('auto-toggle');
 autoT.addEventListener('click', ()=>{ auto=!auto; autoT.classList.toggle('on',auto); });
 hoverT.addEventListener('click', ()=>{ hoverMode=!hoverMode; hoverT.classList.toggle('on',hoverMode); saveSettings(); });
 
-document.getElementById('play-btn').addEventListener('click', startGame);
+document.getElementById('play-btn').addEventListener('click', ()=>{
+    if(diff==='???'){
+        const cost=(SONG.charts['???']?.bloomCost)||50;
+        if(progress.bloom<cost){
+            alert(`🌸 블룸이 부족합니다.\n??? 채보는 ${cost} 블룸이 필요합니다.\n현재: ${progress.bloom} 블룸`);
+            return;
+        }
+        if(!confirm(`🌸 ${cost} 블룸을 소모합니다.\n현재: ${progress.bloom} 블룸\n\n??? 채보를 시작하시겠습니까?`)) return;
+        progress.bloom=Math.max(0,progress.bloom-cost);
+        saveProgress();
+        document.getElementById('title-bloom-val').textContent=progress.bloom;
+    }
+    startGame();
+});
 document.getElementById('r-retry').addEventListener('click', ()=>{
     if(replayMode){ replayMode=false; auto=false; }
     startGame();
