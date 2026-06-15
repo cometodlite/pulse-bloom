@@ -276,6 +276,7 @@ function startGame(){
     buildObjects(); syncHUD();
     // ??? event system reset
     dynJLINE=JLINE_BASE;
+    _hiddenModeBase=hiddenMode;
     const _evSrc=SONG.charts[diff];
     chartEvents=(_evSrc.events||[]).map(e=>({...e})).sort((a,b)=>a.t-b.t);
     nextEventIdx=0; glitchState=null; jlineAnim=null;
@@ -803,6 +804,10 @@ function processChartEvent(ev, now){
         addFloat('SHUFFLE!', {x:W/2,y:H*0.5}, '#ffd166');
     } else if(ev.type==='rewind'){
         if(!ev._fired){ ev._fired=true; doRewind(ev, now); }
+    } else if(ev.type==='hidden_mode'){
+        hiddenMode = ev.on ? true : _hiddenModeBase;
+        document.getElementById('hidden-badge').classList.toggle('on', hiddenMode);
+        addFloat(ev.on ? 'HIDDEN ON' : 'HIDDEN OFF', {x:W/2,y:H*0.5}, '#b07cff');
     }
 }
 
@@ -893,6 +898,7 @@ function drawCaption(text, alpha){
 
 function endGame(){
     running=false; paused=false;
+    hiddenMode=_hiddenModeBase;
     document.getElementById('pause-btn').classList.remove('active');
     if(raf) cancelAnimationFrame(raf);
     const acc = judgeCount? judgeSum/judgeCount*100 : 0;

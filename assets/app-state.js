@@ -113,6 +113,7 @@ let captions=[];
 let chartEvents=[], nextEventIdx=0;
 let glitchState=null;   // {endWebTime} during rewind glitch
 let jlineAnim=null;     // {from,to,startT,dur}
+let _hiddenModeBase=false; // player's pre-game hiddenMode setting (restored after chart events)
 
 // ── title canvas ──
 const titleCv = document.getElementById('title-cv');
