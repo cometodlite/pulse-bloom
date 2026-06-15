@@ -41,16 +41,16 @@ function buildObjects(){
     const totalJudge = objects.reduce((s,o)=>s+1+(o.type==='hold'?1:0), 0);
     scorePerJudge = totalJudge ? Math.floor(1000000/totalJudge) : 1000;
     if(randomMode){
-        const nxArr=objects.map(o=>o.nx);
-        for(let i=nxArr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [nxArr[i],nxArr[j]]=[nxArr[j],nxArr[i]]; }
-        objects.forEach((o,i)=>{ o.nx=nxArr[i]; o.zx=nxArr[i]; });
+        const cxs=objects.map(o=>o.cnx), cys=objects.map(o=>o.cny);
+        for(let i=cxs.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [cxs[i],cxs[j]]=[cxs[j],cxs[i]]; [cys[i],cys[j]]=[cys[j],cys[i]]; }
+        objects.forEach((o,i)=>{ o.cnx=cxs[i]; o.cny=cys[i]; });
     }
-    if(mirrorMode){ objects.forEach(o=>{ o.nx=1-o.nx; o.zx=1-o.zx; }); }
+    if(mirrorMode){ objects.forEach(o=>{ o.cnx=1-o.cnx; }); }
 }
 function P(o){
     return gameMode==='crowning'
         ? {x:o.cnx*W, y:o.cny*H}
-        : {x:o.nx*W, y:H*dynJLINE};
+        : {x:o.cnx*W, y:H*dynJLINE};
 }
 
 // ════════════════ INPUT ════════════════
@@ -476,7 +476,7 @@ function drawWaves(now){
         if(o.state==='wait'||o.state==='done') continue;
         const dt=o.t-now;
         if(dt>APPROACH||dt<-0.12) continue;
-        const dist=Math.hypot((gameMode==='crowning'?o.cnx:o.nx)*W-cx, (gameMode==='crowning'?o.cny:o.ny)*H-cy);
+        const dist=Math.hypot(o.cnx*W-cx, o.cny*H-cy);
         if(dist<R*0.9) continue;
         const prog=Math.max(0, 1-Math.max(0,dt)/APPROACH);
         const waveR=dist*prog;
@@ -571,7 +571,7 @@ function render(now){
             const prox=1-Math.max(0,Math.min(1,dt/APPROACH));
             if(prox<0.55) continue;
             const ga=(prox-0.55)/0.45;
-            const rg=g.createRadialGradient(o.nx*W,jy,0,o.nx*W,jy,R*3);
+            const rg=g.createRadialGradient(o.cnx*W,jy,0,o.cnx*W,jy,R*3);
             rg.addColorStop(0,hexA(o.color,0.35*ga));
             rg.addColorStop(1,hexA(o.color,0));
             g.globalCompositeOperation='lighter';
@@ -608,7 +608,7 @@ function render(now){
         const appT=Math.max(0,Math.min(1, dt/APPROACH));
         const p=gameMode==='crowning'
             ? {x:o.cnx*W, y:o.cny*H}
-            : {x:o.nx*W, y:H*dynJLINE*(1-Math.max(0,appT))};
+            : {x:o.cnx*W, y:H*dynJLINE*(1-appT)};
         if(hiddenMode) g.globalAlpha=Math.min(1, appT/0.38);
         drawObject(o,p,appT,now);
         if(hiddenMode) g.globalAlpha=1;
@@ -800,9 +800,9 @@ function processChartEvent(ev, now){
         jlineAnim={from:dynJLINE, to:ev.y, startT:now, dur:1.5};
     } else if(ev.type==='lane_shuffle'){
         const upcoming=objects.filter(o=>o.state==='wait'||o.state==='approach');
-        const xs=upcoming.map(o=>o.nx);
-        for(let i=xs.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [xs[i],xs[j]]=[xs[j],xs[i]]; }
-        upcoming.forEach((o,i)=>{ o.nx=xs[i]; });
+        const cxs=upcoming.map(o=>o.cnx), cys=upcoming.map(o=>o.cny);
+        for(let i=cxs.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [cxs[i],cxs[j]]=[cxs[j],cxs[i]]; [cys[i],cys[j]]=[cys[j],cys[i]]; }
+        upcoming.forEach((o,i)=>{ o.cnx=cxs[i]; o.cny=cys[i]; });
         addFloat('SHUFFLE!', {x:W/2,y:H*0.5}, '#ffd166');
     } else if(ev.type==='rewind'){
         if(!ev._fired){ ev._fired=true; doRewind(ev, now); }
