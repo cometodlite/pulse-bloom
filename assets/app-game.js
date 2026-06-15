@@ -19,15 +19,17 @@ function buildObjects(){
     const raw = chart.objects;
     const chartShift = (chart.offset||0) / 1000;
     const sections = chart.sections || [];
-    // If chart only has the default y:0.5, spread notes across screen for crowning mode
+    // For charts with uniform y:0.5, compute separate 2D crowning positions (cnx, cny)
+    // so crowning mode spreads notes across the full screen; nx/ny stay as raining coords.
     const hasVariedY = raw.some(o => Math.abs((o.y||0.5)-0.5) > 0.05);
     objects = raw.map((o,i)=>{
         const t = o.t + chartShift;
         const phase = getPhase(t, sections);
-        const ny = hasVariedY ? (o.y||0.5) : crownToY(i);
+        const cnx = hasVariedY ? o.x        : crownToX(i);
+        const cny = hasVariedY ? (o.y||0.5) : crownToY(i);
         return {
             t, type:o.type, dur:o.dur||0,
-            nx:o.x, ny, hint:o.hint||null,
+            nx:o.x, ny:o.y||0.5, cnx, cny, hint:o.hint||null,
             phase,
             zx: phase==='blooming' ? snapToZone(o.x) : o.x,
             color:COLORS[i%COLORS.length],
@@ -47,7 +49,7 @@ function buildObjects(){
 }
 function P(o){
     return gameMode==='crowning'
-        ? {x:o.nx*W, y:o.ny*H}
+        ? {x:o.cnx*W, y:o.cny*H}
         : {x:o.nx*W, y:H*dynJLINE};
 }
 
@@ -474,7 +476,7 @@ function drawWaves(now){
         if(o.state==='wait'||o.state==='done') continue;
         const dt=o.t-now;
         if(dt>APPROACH||dt<-0.12) continue;
-        const dist=Math.hypot(o.nx*W-cx, o.ny*H-cy);
+        const dist=Math.hypot((gameMode==='crowning'?o.cnx:o.nx)*W-cx, (gameMode==='crowning'?o.cny:o.ny)*H-cy);
         if(dist<R*0.9) continue;
         const prog=Math.max(0, 1-Math.max(0,dt)/APPROACH);
         const waveR=dist*prog;
@@ -605,7 +607,7 @@ function render(now){
         const dt=o.t-now;
         const appT=Math.max(0,Math.min(1, dt/APPROACH));
         const p=gameMode==='crowning'
-            ? {x:o.nx*W, y:o.ny*H}
+            ? {x:o.cnx*W, y:o.cny*H}
             : {x:o.nx*W, y:H*dynJLINE*(1-Math.max(0,appT))};
         if(hiddenMode) g.globalAlpha=Math.min(1, appT/0.38);
         drawObject(o,p,appT,now);
