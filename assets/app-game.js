@@ -40,13 +40,16 @@ function buildObjects(){
     // so crowning mode spreads notes across the full screen; nx/ny stay as raining coords.
     const hasVariedY = raw.some(o => Math.abs((o.y||0.5)-0.5) > 0.05);
     const laneMode = IS_PC_MODE && gameMode==='raining';
-    const lanes = laneMode ? computeLanes(raw) : null;
+    // 채보에 lane(0~3)이 직접 지정돼 있으면(수작업/전용 생성 채보) 그대로 존중하고,
+    // 없으면(기존 MIDI 덤프 채보) 시간 기반 자동 분배로 대체한다.
+    const hasAuthoredLane = raw.some(o => o.lane!=null);
+    const autoLanes = (laneMode && !hasAuthoredLane) ? computeLanes(raw) : null;
     objects = raw.map((o,i)=>{
         const t = o.t + chartShift;
         const phase = getPhase(t, sections);
         const cnx = hasVariedY ? o.x        : crownToX(i);
         const cny = hasVariedY ? (o.y||0.5) : crownToY(i);
-        const lane = laneMode ? lanes[i] : 0;
+        const lane = laneMode ? (hasAuthoredLane ? o.lane : autoLanes[i]) : 0;
         return {
             t, type:o.type, dur:o.dur||0,
             nx:o.x, ny:o.y||0.5, cnx, cny, lane, hint:o.hint||null,
