@@ -92,6 +92,11 @@ const CROWN_POS=[
 ];
 function crownToX(i){ return CROWN_POS[i%CROWN_POS.length][0]; }
 function crownToY(i){ return CROWN_POS[i%CROWN_POS.length][1]; }
+// PC(마우스 기본) 기기는 레이닝을 DFJK 4레인으로, 터치 기기는 기존 탭-어디든 방식으로.
+const IS_PC_MODE = !window.matchMedia('(pointer: coarse)').matches;
+const LANE_X = [0.2, 0.4, 0.6, 0.8];
+const LANE_KEYS = {'KeyD':0,'KeyF':1,'KeyJ':2,'KeyK':3};
+const LANE_LABELS = ['D','F','J','K'];
 let objects=[];
 let diff='normal';
 let APPROACH=1.2;

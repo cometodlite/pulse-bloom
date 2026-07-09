@@ -22,14 +22,16 @@ function buildObjects(){
     // For charts with uniform y:0.5, compute separate 2D crowning positions (cnx, cny)
     // so crowning mode spreads notes across the full screen; nx/ny stay as raining coords.
     const hasVariedY = raw.some(o => Math.abs((o.y||0.5)-0.5) > 0.05);
+    const laneMode = IS_PC_MODE && gameMode==='raining';
     objects = raw.map((o,i)=>{
         const t = o.t + chartShift;
         const phase = getPhase(t, sections);
         const cnx = hasVariedY ? o.x        : crownToX(i);
         const cny = hasVariedY ? (o.y||0.5) : crownToY(i);
+        const lane = Math.max(0, Math.min(3, Math.floor((o.x||0.5)*4)));
         return {
             t, type:o.type, dur:o.dur||0,
-            nx:o.x, ny:o.y||0.5, cnx, cny, hint:o.hint||null,
+            nx:o.x, ny:o.y||0.5, cnx, cny, lane, hint:o.hint||null,
             phase,
             zx: phase==='blooming' ? snapToZone(o.x) : o.x,
             color:COLORS[i%COLORS.length],
@@ -41,11 +43,21 @@ function buildObjects(){
     const totalJudge = objects.reduce((s,o)=>s+1+(o.type==='hold'?1:0), 0);
     scorePerJudge = totalJudge ? Math.floor(1000000/totalJudge) : 1000;
     if(randomMode){
-        const cxs=objects.map(o=>o.cnx), cys=objects.map(o=>o.cny);
-        for(let i=cxs.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [cxs[i],cxs[j]]=[cxs[j],cxs[i]]; [cys[i],cys[j]]=[cys[j],cys[i]]; }
-        objects.forEach((o,i)=>{ o.cnx=cxs[i]; o.cny=cys[i]; });
+        if(laneMode){
+            const lanes=objects.map(o=>o.lane);
+            for(let i=lanes.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [lanes[i],lanes[j]]=[lanes[j],lanes[i]]; }
+            objects.forEach((o,i)=>{ o.lane=lanes[i]; });
+        } else {
+            const cxs=objects.map(o=>o.cnx), cys=objects.map(o=>o.cny);
+            for(let i=cxs.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [cxs[i],cxs[j]]=[cxs[j],cxs[i]]; [cys[i],cys[j]]=[cys[j],cys[i]]; }
+            objects.forEach((o,i)=>{ o.cnx=cxs[i]; o.cny=cys[i]; });
+        }
     }
-    if(mirrorMode){ objects.forEach(o=>{ o.cnx=1-o.cnx; }); }
+    if(mirrorMode){
+        if(laneMode) objects.forEach(o=>{ o.lane=3-o.lane; });
+        else objects.forEach(o=>{ o.cnx=1-o.cnx; });
+    }
+    if(laneMode){ objects.forEach(o=>{ o.cnx=LANE_X[o.lane]; }); }
 }
 function P(o){
     return gameMode==='crowning'
@@ -110,7 +122,8 @@ cv.addEventListener('pointercancel', up);
 
 // 키보드: 어떤 키든 best-timed 노트 타격 (얼불춤 스타일)
 const KB_SKIP = new Set(['Escape','Tab','F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12']);
-function kbPos(){
+function kbPos(lane){
+    if(lane!=null) return {x:LANE_X[lane]*W, y:H*dynJLINE};
     const now=songTime(); let best=null, bd=Infinity;
     for(const o of objects){
         if(o.state==='done'||o.state==='held') continue;
@@ -126,8 +139,9 @@ window.addEventListener('keydown', e=>{
     const kid='k'+e.code;
     if(pointers.has(kid)) return;
     e.preventDefault();
-    const {x,y}=kbPos();
-    onDown(kid,x,y);
+    const lane = (IS_PC_MODE && gameMode==='raining' && LANE_KEYS.hasOwnProperty(e.code)) ? LANE_KEYS[e.code] : null;
+    const {x,y}=kbPos(lane);
+    onDown(kid,x,y,lane);
 });
 window.addEventListener('keyup', e=>{
     if(!running||auto) return;
@@ -137,17 +151,18 @@ window.addEventListener('keyup', e=>{
     pointers.delete(kid);
 });
 
-function onDown(id,x,y){
+function onDown(id,x,y,laneFilter){
     if(glitchState){ pointers.set(id,{x,y}); return; }
     const now=songTime();
     hitSound();
     let best=null,bd=Infinity;
     for(const o of objects){
         if(o.state==='done'||o.state==='held') continue;
+        if(laneFilter!=null && o.lane!==laneFilter) continue;
         const dt=Math.abs(o.t-now)*1000;
         if(dt>HIT.miss) continue;
         const p=P(o);
-        // raining: any screen touch hits the best-timed note (Rizline style)
+        // raining: any screen touch hits the best-timed note (Rizline style), or lane-locked on PC
         // crowning: require spatial proximity to the fixed note position
         if(gameMode==='crowning'){
             if(Math.hypot(x-p.x,y-p.y)>R*1.75) continue;
@@ -585,6 +600,17 @@ function render(now){
         lg.addColorStop(0.5,'rgba(180,120,255,0.07)');
         lg.addColorStop(1,'rgba(180,120,255,0)');
         g.fillStyle=lg; g.fillRect(0,jy-14,W,28);
+        g.restore();
+    }
+
+    if(IS_PC_MODE && gameMode==='raining'){
+        g.save();
+        g.textAlign='center'; g.textBaseline='middle';
+        g.font='700 '+Math.round(R*0.55)+'px Segoe UI, sans-serif';
+        for(let i=0;i<4;i++){
+            g.fillStyle='rgba(255,255,255,0.22)';
+            g.fillText(LANE_LABELS[i], LANE_X[i]*W, H*dynJLINE+R*1.9);
+        }
         g.restore();
     }
 
