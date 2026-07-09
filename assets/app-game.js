@@ -14,6 +14,23 @@ function getPhase(t, sections){
     if(!sections||!sections.length) return 'blooming';
     return [...sections].slice().reverse().find(s=>t>=s.startT)?.phase || 'blooming';
 }
+// 4레인 배정: 직전 노트와 같은 레인은(270ms 판정창보다 가까우면) 피하고,
+// 가장 오래 안 쓰인 레인을 골라 4개를 고르게 순환시킨다. 채보의 원래 x좌표
+// 쏠림(예: 특정 드럼 피치가 한 위치에 몰림)에 영향받지 않는다.
+function computeLanes(raw){
+    const lanes=new Array(raw.length);
+    const laneLastT=[-Infinity,-Infinity,-Infinity,-Infinity];
+    let lastLane=-1;
+    for(let i=0;i<raw.length;i++){
+        const t=raw[i].t;
+        let cands=[0,1,2,3];
+        if(lastLane!==-1 && (t-raw[i-1].t)*1000<300) cands=cands.filter(l=>l!==lastLane);
+        let lane=cands[0];
+        for(const l of cands) if(laneLastT[l]<laneLastT[lane]) lane=l;
+        lanes[i]=lane; laneLastT[lane]=t; lastLane=lane;
+    }
+    return lanes;
+}
 function buildObjects(){
     const chart = SONG.charts[diff];
     const raw = chart.objects;
@@ -23,12 +40,13 @@ function buildObjects(){
     // so crowning mode spreads notes across the full screen; nx/ny stay as raining coords.
     const hasVariedY = raw.some(o => Math.abs((o.y||0.5)-0.5) > 0.05);
     const laneMode = IS_PC_MODE && gameMode==='raining';
+    const lanes = laneMode ? computeLanes(raw) : null;
     objects = raw.map((o,i)=>{
         const t = o.t + chartShift;
         const phase = getPhase(t, sections);
         const cnx = hasVariedY ? o.x        : crownToX(i);
         const cny = hasVariedY ? (o.y||0.5) : crownToY(i);
-        const lane = Math.max(0, Math.min(3, Math.floor((o.x||0.5)*4)));
+        const lane = laneMode ? lanes[i] : 0;
         return {
             t, type:o.type, dur:o.dur||0,
             nx:o.x, ny:o.y||0.5, cnx, cny, lane, hint:o.hint||null,
@@ -44,9 +62,10 @@ function buildObjects(){
     scorePerJudge = totalJudge ? Math.floor(1000000/totalJudge) : 1000;
     if(randomMode){
         if(laneMode){
-            const lanes=objects.map(o=>o.lane);
-            for(let i=lanes.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [lanes[i],lanes[j]]=[lanes[j],lanes[i]]; }
-            objects.forEach((o,i)=>{ o.lane=lanes[i]; });
+            // 레인별 순서가 아니라 0~3 레인 자체를 치환 — 이미 만든 시간 분배를 깨지 않는다.
+            const perm=[0,1,2,3];
+            for(let i=perm.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [perm[i],perm[j]]=[perm[j],perm[i]]; }
+            objects.forEach(o=>{ o.lane=perm[o.lane]; });
         } else {
             const cxs=objects.map(o=>o.cnx), cys=objects.map(o=>o.cny);
             for(let i=cxs.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [cxs[i],cxs[j]]=[cxs[j],cxs[i]]; [cys[i],cys[j]]=[cys[j],cys[i]]; }
