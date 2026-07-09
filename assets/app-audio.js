@@ -14,6 +14,13 @@ function initAudio(){
     sfxGain   = ctx.createGain(); sfxGain.gain.value   = sfxVol;
     musicGain.connect(analyser); analyser.connect(ctx.destination);
     sfxGain.connect(ctx.destination);
+    // Safari 오디오 언락: 제스처 핸들러 안에서 무음 버퍼를 동기 재생해야
+    // 이후 비동기(fetch→decode→start)로 시작하는 소스도 소리가 난다.
+    try{
+        const b = ctx.createBufferSource();
+        b.buffer = ctx.createBuffer(1, 1, 22050);
+        b.connect(ctx.destination); b.start(0);
+    }catch(e){}
 }
 
 document.addEventListener('visibilitychange', ()=>{
