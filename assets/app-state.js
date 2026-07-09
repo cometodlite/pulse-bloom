@@ -46,6 +46,7 @@ window.addEventListener('resize', resize); resize();
 // ── audio ──
 let ctx=null, audioBuffer=null, srcNode=null, analyser=null, freqData=null;
 let musicGain=null, sfxGain=null;
+let titleMusicSrc=null, titleMusicBuffer=null;
 let audioStart=0;
 
 // ── player settings ──

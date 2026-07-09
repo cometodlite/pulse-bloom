@@ -86,3 +86,31 @@ function loadAudio(s){
         document.head.appendChild(sc);
     });
 }
+
+function startTitleMusic(){
+    if(!ctx || !musicGain) return;
+    if(titleMusicSrc) return;
+    function play(){
+        if(!titleMusicBuffer || !ctx) return;
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass'; filter.frequency.value = 2500; filter.Q.value = 1.5;
+        filter.connect(musicGain);
+        titleMusicSrc = ctx.createBufferSource();
+        titleMusicSrc.buffer = titleMusicBuffer;
+        titleMusicSrc.loop = true;
+        titleMusicSrc.connect(filter);
+        titleMusicSrc.start(0);
+    }
+    if(titleMusicBuffer){ play(); return; }
+    fetch('assets/title.mp3')
+        .then(r => r.arrayBuffer())
+        .then(buf => ctx.decodeAudioData(buf))
+        .then(decoded => { titleMusicBuffer = decoded; play(); })
+        .catch(()=>{});
+}
+
+function stopTitleMusic(){
+    if(!titleMusicSrc) return;
+    try{ titleMusicSrc.stop(); titleMusicSrc.disconnect(); }catch(e){}
+    titleMusicSrc = null;
+}

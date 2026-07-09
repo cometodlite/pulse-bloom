@@ -172,6 +172,7 @@ function updatePlayBtn(){
 // ── song selection ──
 async function selectSong(s){
     stopPreview();
+    stopTitleMusic();
     if(ctx && ctx.state==='suspended') ctx.resume().catch(()=>{});
     SONG=s; audioBuffer=null;
     document.getElementById('ov-songs').classList.add('hidden');
@@ -353,6 +354,7 @@ document.getElementById('back-title').addEventListener('click', ()=>{
     document.getElementById('ov-songs').classList.add('hidden');
     document.getElementById('ov-title').classList.remove('hidden');
     startTitleAnim();
+    startTitleMusic();
 });
 document.getElementById('btn-achievements').addEventListener('click', ()=>{
     buildAchievements();
@@ -436,6 +438,7 @@ window.addEventListener('keydown', e=>{
     else if(!document.getElementById('ov-songs').classList.contains('hidden')){
         document.getElementById('ov-songs').classList.add('hidden');
         document.getElementById('ov-title').classList.remove('hidden');
+        startTitleMusic();
     }
 });
 
@@ -446,7 +449,7 @@ window.addEventListener('popstate', ()=>{
 document.addEventListener('contextmenu', e => e.preventDefault());
 
 // ════════════════ INIT ════════════════
-try{ initSongs(); startTitleAnim(); }catch(err){
+try{ initSongs(); startIntro(); }catch(err){
     const ld=document.getElementById('songs-loading');
     ld.classList.remove('hidden'); ld.textContent='로드 실패: '+err.message;
     console.error(err);
