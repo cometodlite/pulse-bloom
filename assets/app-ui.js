@@ -449,7 +449,14 @@ window.addEventListener('popstate', ()=>{
 document.addEventListener('contextmenu', e => e.preventDefault());
 
 // ════════════════ INIT ════════════════
-try{ initSongs(); startIntro(); }catch(err){
+function unlockTitleAudio(){
+    initAudio();
+    startTitleMusic();
+}
+document.addEventListener('pointerdown', unlockTitleAudio, {once:true});
+document.addEventListener('keydown', unlockTitleAudio, {once:true});
+
+try{ initSongs(); startTitleAnim(); }catch(err){
     const ld=document.getElementById('songs-loading');
     ld.classList.remove('hidden'); ld.textContent='로드 실패: '+err.message;
     console.error(err);
