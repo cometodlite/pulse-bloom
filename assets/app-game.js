@@ -14,23 +14,6 @@ function getPhase(t, sections){
     if(!sections||!sections.length) return 'blooming';
     return [...sections].slice().reverse().find(s=>t>=s.startT)?.phase || 'blooming';
 }
-// 4레인 배정: 직전 노트와 같은 레인은(270ms 판정창보다 가까우면) 피하고,
-// 가장 오래 안 쓰인 레인을 골라 4개를 고르게 순환시킨다. 채보의 원래 x좌표
-// 쏠림(예: 특정 드럼 피치가 한 위치에 몰림)에 영향받지 않는다.
-function computeLanes(raw){
-    const lanes=new Array(raw.length);
-    const laneLastT=[-Infinity,-Infinity,-Infinity,-Infinity];
-    let lastLane=-1;
-    for(let i=0;i<raw.length;i++){
-        const t=raw[i].t;
-        let cands=[0,1,2,3];
-        if(lastLane!==-1 && (t-raw[i-1].t)*1000<300) cands=cands.filter(l=>l!==lastLane);
-        let lane=cands[0];
-        for(const l of cands) if(laneLastT[l]<laneLastT[lane]) lane=l;
-        lanes[i]=lane; laneLastT[lane]=t; lastLane=lane;
-    }
-    return lanes;
-}
 function buildObjects(){
     const chart = SONG.charts[diff];
     const raw = chart.objects;
@@ -39,20 +22,14 @@ function buildObjects(){
     // For charts with uniform y:0.5, compute separate 2D crowning positions (cnx, cny)
     // so crowning mode spreads notes across the full screen; nx/ny stay as raining coords.
     const hasVariedY = raw.some(o => Math.abs((o.y||0.5)-0.5) > 0.05);
-    const laneMode = IS_PC_MODE && gameMode==='raining';
-    // 채보에 lane(0~3)이 직접 지정돼 있으면(수작업/전용 생성 채보) 그대로 존중하고,
-    // 없으면(기존 MIDI 덤프 채보) 시간 기반 자동 분배로 대체한다.
-    const hasAuthoredLane = raw.some(o => o.lane!=null);
-    const autoLanes = (laneMode && !hasAuthoredLane) ? computeLanes(raw) : null;
     objects = raw.map((o,i)=>{
         const t = o.t + chartShift;
         const phase = getPhase(t, sections);
         const cnx = hasVariedY ? o.x        : crownToX(i);
         const cny = hasVariedY ? (o.y||0.5) : crownToY(i);
-        const lane = laneMode ? (hasAuthoredLane ? o.lane : autoLanes[i]) : 0;
         return {
             t, type:o.type, dur:o.dur||0,
-            nx:o.x, ny:o.y||0.5, cnx, cny, lane, hint:o.hint||null,
+            nx:o.x, ny:o.y||0.5, cnx, cny, hint:o.hint||null,
             phase,
             zx: phase==='blooming' ? snapToZone(o.x) : o.x,
             color:COLORS[i%COLORS.length],
@@ -64,22 +41,11 @@ function buildObjects(){
     const totalJudge = objects.reduce((s,o)=>s+1+(o.type==='hold'?1:0), 0);
     scorePerJudge = totalJudge ? Math.floor(1000000/totalJudge) : 1000;
     if(randomMode){
-        if(laneMode){
-            // 레인별 순서가 아니라 0~3 레인 자체를 치환 — 이미 만든 시간 분배를 깨지 않는다.
-            const perm=[0,1,2,3];
-            for(let i=perm.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [perm[i],perm[j]]=[perm[j],perm[i]]; }
-            objects.forEach(o=>{ o.lane=perm[o.lane]; });
-        } else {
-            const cxs=objects.map(o=>o.cnx), cys=objects.map(o=>o.cny);
-            for(let i=cxs.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [cxs[i],cxs[j]]=[cxs[j],cxs[i]]; [cys[i],cys[j]]=[cys[j],cys[i]]; }
-            objects.forEach((o,i)=>{ o.cnx=cxs[i]; o.cny=cys[i]; });
-        }
+        const cxs=objects.map(o=>o.cnx), cys=objects.map(o=>o.cny);
+        for(let i=cxs.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [cxs[i],cxs[j]]=[cxs[j],cxs[i]]; [cys[i],cys[j]]=[cys[j],cys[i]]; }
+        objects.forEach((o,i)=>{ o.cnx=cxs[i]; o.cny=cys[i]; });
     }
-    if(mirrorMode){
-        if(laneMode) objects.forEach(o=>{ o.lane=3-o.lane; });
-        else objects.forEach(o=>{ o.cnx=1-o.cnx; });
-    }
-    if(laneMode){ objects.forEach(o=>{ o.cnx=LANE_X[o.lane]; }); }
+    if(mirrorMode){ objects.forEach(o=>{ o.cnx=1-o.cnx; }); }
 }
 function P(o){
     return gameMode==='crowning'
@@ -144,8 +110,7 @@ cv.addEventListener('pointercancel', up);
 
 // 키보드: 어떤 키든 best-timed 노트 타격 (얼불춤 스타일)
 const KB_SKIP = new Set(['Escape','Tab','F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12']);
-function kbPos(lane){
-    if(lane!=null) return {x:LANE_X[lane]*W, y:H*dynJLINE};
+function kbPos(){
     const now=songTime(); let best=null, bd=Infinity;
     for(const o of objects){
         if(o.state==='done'||o.state==='held') continue;
@@ -161,9 +126,8 @@ window.addEventListener('keydown', e=>{
     const kid='k'+e.code;
     if(pointers.has(kid)) return;
     e.preventDefault();
-    const lane = (IS_PC_MODE && gameMode==='raining' && LANE_KEYS.hasOwnProperty(e.code)) ? LANE_KEYS[e.code] : null;
-    const {x,y}=kbPos(lane);
-    onDown(kid,x,y,lane);
+    const {x,y}=kbPos();
+    onDown(kid,x,y);
 });
 window.addEventListener('keyup', e=>{
     if(!running||auto) return;
@@ -173,18 +137,18 @@ window.addEventListener('keyup', e=>{
     pointers.delete(kid);
 });
 
-function onDown(id,x,y,laneFilter){
+function onDown(id,x,y){
     if(glitchState){ pointers.set(id,{x,y}); return; }
     const now=songTime();
     hitSound();
     let best=null,bd=Infinity;
     for(const o of objects){
         if(o.state==='done'||o.state==='held') continue;
-        if(laneFilter!=null && o.lane!==laneFilter) continue;
+        if(o.type==='drag') continue; // drag는 탭 타이밍이 아니라 접촉 유무로만 판정
         const dt=Math.abs(o.t-now)*1000;
         if(dt>HIT.miss) continue;
         const p=P(o);
-        // raining: any screen touch hits the best-timed note (Rizline style), or lane-locked on PC
+        // raining: any screen touch hits the best-timed note (Rizline style)
         // crowning: require spatial proximity to the fixed note position
         if(gameMode==='crowning'){
             if(Math.hypot(x-p.x,y-p.y)>R*1.75) continue;
@@ -221,7 +185,8 @@ function finalizeHold(o, endTime){
     if(o.state!=='held') return;
     const frac = Math.max(0,Math.min(1,(endTime-o.t)/(o.dur||0.001)));
     const p=P(o);
-    const tail = frac>=0.85?'perfect': frac>=0.5?'good':'miss';
+    // Rizline 스타일: 끝에 정확히 떼지 않아도 됨 — 헤드만 맞았으면 릴리즈는 관대하게 판정
+    const tail = frac>=0.6?'perfect': frac>=0.25?'good':'miss';
     if(!auto && !replayMode) replayLog.push({t:endTime, noteIdx:objects.indexOf(o), judge:tail, isHold:true});
     applyTail(tail,p,o.color);
     o.state='done';
@@ -404,12 +369,21 @@ function update(now){
             }
             if(o.state==='approach' && now>=o.t){
                 const p=P(o);
-                if(o.type==='tap'){ o.state='done'; applyJudge('perfect',p,o.color); addNextGlow(o); }
+                if(o.type==='tap'||o.type==='drag'){ o.state='done'; applyJudge('perfect',p,o.color); addNextGlow(o); }
                 else { o.headJudge='perfect'; applyJudge('perfect',p,o.color); o.state='held'; o.lastTick=now; addNextGlow(o); }
                 hitSound();
             }
             if(o.state==='held' && now>=o.t+o.dur){ finalizeHold(o, o.t+o.dur); }
         } else {
+            // drag: 정확한 탭 타이밍이 아니라 판정 구간 동안 화면 어딘가에 손가락/입력이
+            // 닿아 있기만 하면 성공 (Rizline 스타일)
+            if(o.type==='drag' && o.state==='approach' && now >= o.t - HIT.miss/1000 && pointers.size>0){
+                const p=P(o);
+                o.state='done';
+                hitSound();
+                applyJudge('perfect',p,o.color);
+                addNextGlow(o);
+            }
             if(hoverMode && o.state==='approach' && cursor.on && now >= o.t - HIT.perfect/1000){
                 const p=P(o);
                 const onLn=gameMode!=='crowning';
@@ -625,17 +599,6 @@ function render(now){
         g.restore();
     }
 
-    if(IS_PC_MODE && gameMode==='raining'){
-        g.save();
-        g.textAlign='center'; g.textBaseline='middle';
-        g.font='700 '+Math.round(R*0.55)+'px Segoe UI, sans-serif';
-        for(let i=0;i<4;i++){
-            g.fillStyle='rgba(255,255,255,0.22)';
-            g.fillText(LANE_LABELS[i], LANE_X[i]*W, H*dynJLINE+R*1.9);
-        }
-        g.restore();
-    }
-
     drawFollowPoints(now);
     if(gameMode==='crowning') drawCrowningArrows(now);
 
@@ -707,12 +670,12 @@ function drawObject(o,p,appT,now){
 }
 
 function drawCrowningNote(o,p,appT,now){
-    const isHold=o.type==='hold', col=o.color;
+    const isHold=o.type==='hold', isDrag=o.type==='drag', col=o.color;
     const ringR=R*(1+appT*(isDense()?2.2:3.0));
     g.beginPath(); g.arc(p.x,p.y,ringR,0,Math.PI*2);
     g.strokeStyle=hexA(col,0.85*(1-appT*0.3)); g.lineWidth=3; g.stroke();
     g.beginPath(); g.arc(p.x,p.y,R,0,Math.PI*2);
-    if(isHold){
+    if(isHold||isDrag){
         g.strokeStyle=hexA(col,0.95); g.lineWidth=4; g.stroke();
         const ig=g.createRadialGradient(p.x,p.y,0,p.x,p.y,R);
         ig.addColorStop(0,hexA(col,0.18)); ig.addColorStop(1,hexA(col,0));
@@ -731,9 +694,9 @@ function drawCrowningNote(o,p,appT,now){
         g.beginPath(); g.arc(p.x,p.y,R*(0.5+0.15*Math.sin(now*20)),0,Math.PI*2);
         g.fillStyle=hexA(col,0.5); g.fill();
     }
-    if(isHold && o.state==='approach'){
+    if((isHold||isDrag) && o.state==='approach'){
         g.font='600 '+Math.round(R*0.5)+'px Segoe UI'; g.textAlign='center'; g.textBaseline='middle';
-        g.fillStyle=hexA('#ffffff',0.6); g.fillText('HOLD', p.x, p.y);
+        g.fillStyle=hexA('#ffffff',0.6); g.fillText(isDrag?'DRAG':'HOLD', p.x, p.y);
     }
     if(o.hint && (o.state==='approach'||o.state==='held')){
         const pl=0.5+0.4*Math.sin(now*7);
@@ -748,7 +711,7 @@ function drawCrowningNote(o,p,appT,now){
 }
 
 function drawRainingNote(o,p,appT,now){
-    const col=o.color, isHold=o.type==='hold';
+    const col=o.color, isHold=o.type==='hold', isDrag=o.type==='drag';
     const jy=H*dynJLINE;
     const dt=o.t-now;
     const missFrac=dt<0?Math.min(1,Math.abs(dt)/(HIT.miss/1000)):0;
@@ -765,7 +728,7 @@ function drawRainingNote(o,p,appT,now){
         g.stroke(); g.restore();
     }
 
-    if(!isHold){
+    if(!isHold && !isDrag){
         const rg=g.createRadialGradient(p.x,p.y,0,p.x,p.y,R);
         rg.addColorStop(0,hexA(col,0.9*a)); rg.addColorStop(0.65,hexA(col,0.45*a)); rg.addColorStop(1,hexA(col,0.04));
         g.fillStyle=rg; g.beginPath(); g.arc(p.x,p.y,R,0,Math.PI*2); g.fill();
@@ -796,9 +759,9 @@ function drawRainingNote(o,p,appT,now){
         g.beginPath(); g.arc(p.x,jy,R*(0.48+0.14*Math.sin(now*20)),0,Math.PI*2);
         g.fillStyle=hexA(col,0.5); g.fill();
     }
-    if(isHold && o.state==='approach'){
+    if((isHold||isDrag) && o.state==='approach'){
         g.font='600 '+Math.round(R*0.5)+'px Segoe UI'; g.textAlign='center'; g.textBaseline='middle';
-        g.fillStyle=hexA('#ffffff',0.6*a); g.fillText('HOLD', p.x, p.y);
+        g.fillStyle=hexA('#ffffff',0.6*a); g.fillText(isDrag?'DRAG':'HOLD', p.x, p.y);
     }
     if(o.hint && (o.state==='approach'||o.state==='held')){
         const pl=0.5+0.4*Math.sin(now*7);
