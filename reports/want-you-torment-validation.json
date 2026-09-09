@@ -1,0 +1,38 @@
+{
+  "songId": "want-you",
+  "difficulty": "torment",
+  "level": 11,
+  "approachSeconds": 0.85,
+  "noteCount": 1105,
+  "tapCount": 1050,
+  "holdCount": 55,
+  "twoNoteChords": 54,
+  "audioOnsetsAdded": 190,
+  "peakNotesPerSecond": 12,
+  "maximumSimultaneousContacts": 2,
+  "audioSha256": "3f61fbe288b6ee1be2e9cbe70dd570010f4664e0952b2e610ac2a4d3d9b25000",
+  "chartSha256": "e7af2360ca20a86697be2bcf09ebc48f25a0a794ed86932f00767786f3d929f1",
+  "browserValidation": {
+    "runtimeInjectionOnly": true,
+    "difficultySelection": true,
+    "rendering": true,
+    "decodedAudioDuration": 189.47997916666668,
+    "simulationHz": 120,
+    "completedObjects": 1105,
+    "completedJudgements": 1160,
+    "miss": 0,
+    "good": 0,
+    "pageErrors": 0
+  },
+  "integration": {
+    "appliedToSongsJS": false,
+    "committed": false,
+    "instructions": "source/want-you_torment_chart.json 전체 객체를 Want You의 charts.torment로 넣고 ladder에 torment를 추가한다. 이후 scripts/sync-charts.py --export를 실행한다. source/charts/want-you_torment.json은 에디터 가져오기용 배열이다."
+  },
+  "design": "END 절대 초 타이밍을 바탕으로 고밀도 구간에 음원 spectral-flux 피크 190개 추가, 54쌍 동시타, 55홀드. 홀드 중 반대손 탭. 2.619초의 기존 40ms 연타 선행 노트 1개는 후보에서 제외. 쉬어가는 98.7~125.25초 및 아웃트로는 증량하지 않음. 경로 없는 drag는 사용하지 않음.",
+  "limitations": [
+    "Lv.11은 제작 목표이며 사람의 실제 플레이 난이도 검증 전이다.",
+    "신호 분석 및 기존 채보 기반으로 제작했으며 전곡 청취 싱크 검증은 하지 않았다.",
+    "자동 판정은 엔진에서 끝까지 처리되는지 확인하며 사람이 모든 노트를 칠 수 있다는 보장은 아니다."
+  ]
+}

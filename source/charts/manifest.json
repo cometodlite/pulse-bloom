@@ -71,12 +71,9 @@
         "duration": 189.48,
         "approach": 0.62,
         "ladder": [
-          "normal",
           "chaotic",
-          "end"
-        ],
-        "comingSoon": [
-          "normal"
+          "end",
+          "torment"
         ]
       },
       "audioSha256": "3f61fbe288b6ee1be2e9cbe70dd570010f4664e0952b2e610ac2a4d3d9b25000",
@@ -93,6 +90,14 @@
           "noteCount": 862,
           "meta": {
             "level": 9
+          }
+        },
+        "torment": {
+          "file": "want-you_torment.json",
+          "noteCount": 1105,
+          "meta": {
+            "level": 11,
+            "approach": 0.85
           }
         }
       }
