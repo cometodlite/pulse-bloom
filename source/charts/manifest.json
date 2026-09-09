@@ -1,0 +1,215 @@
+{
+  "format": "pulsebloom-editable-charts-v1",
+  "revision": 1,
+  "timeUnit": "seconds",
+  "chartOffsetUnit": "milliseconds",
+  "songs": [
+    {
+      "meta": {
+        "title": "ALICE IS — Miss Master",
+        "subtitle": "Tutorial Soundtrack",
+        "audio": "assets/alice-is-miss-master.mp3",
+        "isTutorial": true,
+        "bpm": 125.074,
+        "offset": 0.206,
+        "duration": 116.28,
+        "ladder": [
+          "normal",
+          "chaotic",
+          "end"
+        ],
+        "id": "miss-master",
+        "approach": 1.5
+      },
+      "audioSha256": "38973f935900e2440564104c0094578c75f1590bfe91b12bdc8bfaebddde2805",
+      "charts": {
+        "normal": {
+          "file": "miss-master_normal.json",
+          "noteCount": 49,
+          "meta": {
+            "level": 1,
+            "captions": [
+              {
+                "t0": 2,
+                "t1": 10.2,
+                "text": "TUTORIAL · 위에서 노트가 떨어집니다 — 판정선에 닿으면 터치!"
+              },
+              {
+                "t0": 10.2,
+                "t1": 14.3,
+                "text": "화면 어디든 터치해도 OK — 타이밍이 전부입니다"
+              },
+              {
+                "t0": 22.312,
+                "t1": 26.312,
+                "text": "속이 빈 원은 판정선에서 꾸욱 — 막대가 사라질 때까지 홀드!"
+              },
+              {
+                "t0": 58,
+                "t1": 62.5,
+                "text": "좋아요 — 이제 리듬에 몸을 맡기세요 ♪"
+              },
+              {
+                "t0": 103.5,
+                "t1": 108,
+                "text": "꾹 누르고 → 떼고 → 탭! 번갈아 가며"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "meta": {
+        "id": "want-you",
+        "title": "ALICE IS — Want You",
+        "subtitle": "",
+        "audio": "assets/alice-is-want-you.mp3",
+        "isTutorial": false,
+        "bpm": 125,
+        "offset": 0,
+        "duration": 189.48,
+        "approach": 0.62,
+        "ladder": [
+          "normal",
+          "chaotic",
+          "end"
+        ],
+        "comingSoon": [
+          "normal"
+        ]
+      },
+      "audioSha256": "3f61fbe288b6ee1be2e9cbe70dd570010f4664e0952b2e610ac2a4d3d9b25000",
+      "charts": {
+        "chaotic": {
+          "file": "want-you_chaotic.json",
+          "noteCount": 632,
+          "meta": {
+            "level": 7
+          }
+        },
+        "end": {
+          "file": "want-you_end.json",
+          "noteCount": 862,
+          "meta": {
+            "level": 9
+          }
+        }
+      }
+    },
+    {
+      "meta": {
+        "id": "cut-your-string",
+        "title": "ALICE IS — Cut Your String",
+        "subtitle": "",
+        "bpm": 95.06,
+        "offset": 0,
+        "duration": 173.08,
+        "ladder": [
+          "chaotic",
+          "end",
+          "torment"
+        ]
+      },
+      "audioSha256": "b5999e84f34d14ee601873a9632da95cc46f78b5704d9b488613df3e5190d8de",
+      "charts": {
+        "chaotic": {
+          "file": "cut-your-string_chaotic.json",
+          "noteCount": 232,
+          "meta": {
+            "level": 6,
+            "approach": 1.2
+          }
+        },
+        "end": {
+          "file": "cut-your-string_end.json",
+          "noteCount": 258,
+          "meta": {
+            "level": 9,
+            "approach": 1.4
+          }
+        },
+        "torment": {
+          "file": "cut-your-string_torment.json",
+          "noteCount": 473,
+          "meta": {
+            "level": 12,
+            "approach": 1.6
+          }
+        }
+      }
+    },
+    {
+      "meta": {
+        "id": "why-we-still-live",
+        "title": "Why We Still Live",
+        "subtitle": "",
+        "audio": "assets/why-we-still-live.mp3",
+        "isTutorial": false,
+        "bpm": 87.2,
+        "offset": 0,
+        "duration": 113.832,
+        "approach": 0.9,
+        "ladder": [
+          "chaotic",
+          "end"
+        ]
+      },
+      "audioSha256": "ed6d83d39a6edd647269008f03590af7cd8bba025a10a66a5dfd57b25280af3e",
+      "charts": {
+        "chaotic": {
+          "file": "why-we-still-live_chaotic.json",
+          "noteCount": 217,
+          "meta": {
+            "level": 5,
+            "approach": 0.9
+          }
+        },
+        "end": {
+          "file": "why-we-still-live_end.json",
+          "noteCount": 339,
+          "meta": {
+            "level": 7,
+            "approach": 0.75
+          }
+        }
+      }
+    },
+    {
+      "meta": {
+        "id": "dear-to-my-love",
+        "title": "사랑하는 그대에게",
+        "subtitle": "Dear. Min",
+        "audio": "assets/dear-to-my-love.mp3",
+        "isTutorial": false,
+        "bpm": 81.5,
+        "offset": 0,
+        "duration": 213.394,
+        "approach": 1.0,
+        "ladder": [
+          "chaotic",
+          "end"
+        ]
+      },
+      "audioSha256": "6829017466cbd8b84836db85192382bc7b2755bb84b7941adedcdd1f07692f06",
+      "charts": {
+        "chaotic": {
+          "file": "dear-to-my-love_chaotic.json",
+          "noteCount": 540,
+          "meta": {
+            "level": 6,
+            "approach": 1.0
+          }
+        },
+        "end": {
+          "file": "dear-to-my-love_end.json",
+          "noteCount": 726,
+          "meta": {
+            "level": 8,
+            "approach": 0.8
+          }
+        }
+      }
+    }
+  ]
+}
