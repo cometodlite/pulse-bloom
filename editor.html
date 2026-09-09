@@ -136,6 +136,7 @@ input[type=number]{ width:80px; }
         <button class="tab-btn active" id="tab-a" onclick="switchTab('a')">🎵 Mode A — 키보드 탭 기록</button>
         <button class="tab-btn" id="tab-b" onclick="switchTab('b')">📐 Mode B — BPM 타임라인 배치</button>
         <button class="tab-btn" id="tab-c" onclick="switchTab('c')">🎮 Mode C — 캔버스 직접 클릭</button>
+        <button class="tab-btn" id="tab-d" onclick="switchTab('d')" style="display:none">🤖 Mode D — AI 자동 생성</button>
     </div>
 
     <!-- 1. 음악 (공통) -->
@@ -274,6 +275,51 @@ input[type=number]{ width:80px; }
         </div>
     </div>
 
+    <!-- ══ MODE D — AI 자동 생성 ══ -->
+    <div id="mode-d-section" style="display:none">
+        <div id="work-d" class="disabled-area">
+            <div class="card">
+                <h2>2D · AI 자동 채보 생성</h2>
+                <div class="row">
+                    <span class="lbl">난이도</span>
+                    <button class="ctl d-diff" data-d="easy">쉬움</button>
+                    <button class="ctl d-diff sel" data-d="normal">보통</button>
+                    <button class="ctl d-diff" data-d="hard">어려움</button>
+                    <button class="ctl d-diff" data-d="extreme">극한</button>
+                </div>
+                <div class="row">
+                    <span class="lbl">민감도</span>
+                    <input type="range" id="d-sens" min="0.5" max="2" step="0.05" value="1" style="flex:1;min-width:160px">
+                    <span class="val" id="d-sens-val">1.00×</span>
+                </div>
+                <div class="row">
+                    <label class="lbl" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                        <input type="checkbox" id="d-holds" checked> 긴 저음 → 홀드 자동 생성
+                    </label>
+                    <label class="lbl" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                        <input type="checkbox" id="d-spread" checked> 노트 위치 자동 분산
+                    </label>
+                </div>
+                <div class="row">
+                    <button class="ctl primary" id="d-gen-btn">🤖 채보 생성</button>
+                    <button class="ctl danger" id="d-clear-btn">AI 노트만 삭제</button>
+                    <span class="lbl" id="d-status" style="margin-left:4px">음악을 불러온 뒤 생성하세요</span>
+                </div>
+                <div class="stat" style="margin-top:6px">
+                    <div><div class="v" id="d-bpm">—</div><div class="k">추정 BPM</div></div>
+                    <div><div class="v" style="color:#5ee0ff" id="d-onsets">—</div><div class="k">감지된 온셋</div></div>
+                    <div><div class="v" style="color:#b07cff" id="d-notes">—</div><div class="k">생성된 노트</div></div>
+                </div>
+                <div class="hint">
+                    업로드한 음원을 스펙트럴 플럭스로 분석해 온셋(타격음)을 찾고,
+                    난이도별 목표 밀도에 맞춰 Rizline 스타일 노트를 배치합니다.
+                    같은 위치 노트 간격은 게임 판정창(<b>270ms</b>) 이상으로 강제됩니다.<br>
+                    생성 후 <b>Mode A/B/C</b>에서 세부 수정하고 아래에서 내보내세요.
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 3. 공통: 검토 & 내보내기 -->
     <div class="card">
         <h2>3 · 검토 & 내보내기</h2>
@@ -296,6 +342,7 @@ input[type=number]{ width:80px; }
             <div><div class="v" style="color:#5ee0ff" id="n-a-count">0</div><div class="k">Mode A (키보드)</div></div>
             <div><div class="v" style="color:#b07cff" id="n-b-count">0</div><div class="k">Mode B (타임라인)</div></div>
             <div><div class="v" style="color:#ff7caa" id="n-c-count">0</div><div class="k">Mode C (클릭)</div></div>
+            <div><div class="v" style="color:#ffd166" id="n-d-count">0</div><div class="k">Mode D (AI)</div></div>
         </div>
         <div class="hint">
             내보내기는 <b>songs.js의 objects 배열</b>에 바로 붙여넣기 가능한 형식입니다.
@@ -344,9 +391,11 @@ function switchTab(t){
     document.getElementById('tab-a').classList.toggle('active', t==='a');
     document.getElementById('tab-b').classList.toggle('active', t==='b');
     document.getElementById('tab-c').classList.toggle('active', t==='c');
+    document.getElementById('tab-d').classList.toggle('active', t==='d');
     document.getElementById('mode-a-section').style.display = t==='a' ? '' : 'none';
     document.getElementById('mode-b-section').style.display = t==='b' ? '' : 'none';
     document.getElementById('mode-c-section').style.display = t==='c' ? '' : 'none';
+    document.getElementById('mode-d-section').style.display = t==='d' ? '' : 'none';
     selectedNote = null;
     updateSelInfoA(); updateBSelInfo();
     if(t==='b'){ bResize(); bRenderLoop(); }
@@ -414,6 +463,8 @@ async function loadFile(f){
         document.getElementById('work-a').classList.remove('disabled-area');
         document.getElementById('work-b').classList.remove('disabled-area');
         document.getElementById('work-c').classList.remove('disabled-area');
+        document.getElementById('work-d').classList.remove('disabled-area');
+        document.getElementById('d-status').textContent = '준비 완료 — 🤖 채보 생성을 누르세요';
         if(!document.getElementById('title').value)
             document.getElementById('title').value = f.name.replace(/\.[^.]+$/,'');
         drawTL();
@@ -695,6 +746,7 @@ function updateStats(){
     const a=notes.filter(n=>n.src==='a'||!n.src).length;
     const b=notes.filter(n=>n.src==='b').length;
     const c=notes.filter(n=>n.src==='c').length;
+    const d=notes.filter(n=>n.src==='d').length;
     const taps=notes.filter(n=>n.type==='tap').length;
     document.getElementById('n-count').textContent=total;
     document.getElementById('n-tap').textContent=taps;
@@ -703,6 +755,7 @@ function updateStats(){
     document.getElementById('n-a-count').textContent=a;
     document.getElementById('n-b-count').textContent=b;
     document.getElementById('n-c-count').textContent=c;
+    document.getElementById('n-d-count').textContent=d;
 }
 
 // ════════════════════════════════════════════════════
@@ -1234,6 +1287,258 @@ function cRenderLoop(){
     cDraw();
     cRafId = requestAnimationFrame(cRenderLoop);
 }
+
+// ════════════════════════════════════════════════════
+//  MODE D — AI 자동 채보 생성 (브라우저 온셋 분석)
+// ════════════════════════════════════════════════════
+// #aicreate 또는 ?aicreate 가 링크에 있을 때만 탭 노출
+if(/aicreate/i.test(location.hash) || /aicreate/i.test(location.search)){
+    document.getElementById('tab-d').style.display = '';
+}
+
+let dDiff = 'normal';
+document.querySelectorAll('.d-diff').forEach(b=>b.onclick=()=>{
+    document.querySelectorAll('.d-diff').forEach(x=>x.classList.remove('sel'));
+    b.classList.add('sel'); dDiff = b.dataset.d;
+});
+const dSens = document.getElementById('d-sens');
+dSens.oninput = ()=>{ document.getElementById('d-sens-val').textContent = (+dSens.value).toFixed(2)+'×'; };
+
+// 난이도별 목표: 초당 노트 수, 같은 자리 최소 간격(ms) — MIN_GAP은 HIT.miss(270ms) 이상
+const D_PROFILES = {
+    easy:    { nps: 1.6, minGap: 340, holdMin: 0.7 },
+    normal:  { nps: 2.6, minGap: 300, holdMin: 0.6 },
+    hard:    { nps: 4.0, minGap: 270, holdMin: 0.5 },
+    extreme: { nps: 6.0, minGap: 270, holdMin: 0.45 },
+};
+
+// ── 작은 radix-2 FFT (in-place, 실수/허수 배열) ──
+function fft(re, im){
+    const n = re.length;
+    for(let i=1, j=0; i<n; i++){
+        let bit = n>>1;
+        for(; j & bit; bit>>=1) j ^= bit;
+        j ^= bit;
+        if(i < j){ [re[i],re[j]]=[re[j],re[i]]; [im[i],im[j]]=[im[j],im[i]]; }
+    }
+    for(let len=2; len<=n; len<<=1){
+        const ang = -2*Math.PI/len;
+        const wr = Math.cos(ang), wi = Math.sin(ang);
+        for(let i=0; i<n; i+=len){
+            let cr = 1, ci = 0;
+            for(let k=0; k<len/2; k++){
+                const ur = re[i+k],           ui = im[i+k];
+                const vr = re[i+k+len/2]*cr - im[i+k+len/2]*ci;
+                const vi = re[i+k+len/2]*ci + im[i+k+len/2]*cr;
+                re[i+k] = ur+vr;  im[i+k] = ui+vi;
+                re[i+k+len/2] = ur-vr;  im[i+k+len/2] = ui-vi;
+                const ncr = cr*wr - ci*wi;
+                ci = cr*wi + ci*wr;  cr = ncr;
+            }
+        }
+    }
+}
+
+// ── 온셋 검출: 스펙트럴 플럭스 + 적응형 임계 피크피킹 ──
+function detectOnsets(buf, sensitivity){
+    const sr = buf.sampleRate;
+    const ch = buf.numberOfChannels;
+    const N = buf.length;
+    // 모노 믹스
+    const mono = new Float32Array(N);
+    for(let c=0; c<ch; c++){
+        const d = buf.getChannelData(c);
+        for(let i=0; i<N; i++) mono[i] += d[i]/ch;
+    }
+    const FFT = 1024, HOP = 512;
+    const win = new Float32Array(FFT);
+    for(let i=0; i<FFT; i++) win[i] = 0.5 - 0.5*Math.cos(2*Math.PI*i/(FFT-1)); // Hann
+    const nFrames = Math.floor((N - FFT) / HOP);
+    const flux = new Float32Array(nFrames);
+    const lowE = new Float32Array(nFrames);       // 저역(≈<200Hz) 에너지 → 킥/베이스
+    const prevMag = new Float32Array(FFT/2);
+    const re = new Float32Array(FFT), im = new Float32Array(FFT);
+    const lowBin = Math.max(1, Math.floor(200 / (sr/FFT)));
+    for(let f=0; f<nFrames; f++){
+        const off = f*HOP;
+        for(let i=0; i<FFT; i++){ re[i] = mono[off+i]*win[i]; im[i] = 0; }
+        fft(re, im);
+        let sf = 0, le = 0;
+        for(let k=0; k<FFT/2; k++){
+            const mag = Math.hypot(re[k], im[k]);
+            const diff = mag - prevMag[k];
+            if(diff > 0) sf += diff;
+            if(k <= lowBin) le += mag;
+            prevMag[k] = mag;
+        }
+        flux[f] = sf;
+        lowE[f] = le;
+    }
+    // 적응형 임계: 이동평균 * (1 + 여유) / 민감도
+    const W = 16;
+    const onsets = [];
+    const fps = sr / HOP;
+    let lastT = -1;
+    for(let f=1; f<nFrames-1; f++){
+        let sum=0, cnt=0;
+        for(let j=f-W; j<=f+W; j++){ if(j>=0 && j<nFrames){ sum+=flux[j]; cnt++; } }
+        const mean = sum/cnt;
+        const thr = mean * (1.35 / sensitivity);
+        if(flux[f] > thr && flux[f] >= flux[f-1] && flux[f] > flux[f+1]){
+            const t = f/fps;
+            if(t > 0.2 && t - lastT >= 0.05){
+                onsets.push({ t, strength: flux[f]/(mean+1e-6), low: lowE[f] });
+                lastT = t;
+            }
+        }
+    }
+    // 저역 에너지 정규화
+    let maxLow = 1e-6;
+    for(let f=0; f<nFrames; f++) if(lowE[f]>maxLow) maxLow=lowE[f];
+    for(const o of onsets) o.lowNorm = o.low/maxLow;
+    return { onsets, flux, fps };
+}
+
+// ── 온셋 간격 히스토그램 → BPM 추정 ──
+function estimateBPM(onsets){
+    if(onsets.length < 8) return null;
+    const iois = [];
+    for(let i=1; i<onsets.length; i++){
+        const d = onsets[i].t - onsets[i-1].t;
+        if(d > 0.12 && d < 1.5) iois.push(d);
+    }
+    if(!iois.length) return null;
+    // 60..200 BPM 범위에서 최적 주기 탐색
+    let best=null, bestScore=-1;
+    for(let bpm=60; bpm<=200; bpm+=0.5){
+        const period = 60/bpm;
+        let score = 0;
+        for(const d of iois){
+            const ratio = d/period;
+            const near = Math.abs(ratio - Math.round(ratio));
+            if(Math.round(ratio) >= 1 && Math.round(ratio) <= 4 && near < 0.12) score++;
+        }
+        if(score > bestScore){ bestScore = score; best = bpm; }
+    }
+    // 일반적인 범위(70~140)로 옥타브 폴딩
+    if(best){
+        while(best > 140) best /= 2;
+        while(best < 70)  best *= 2;
+    }
+    return best;
+}
+
+// ── 목표 밀도에 맞춰 온셋 솎기 ──
+function thinOnsets(onsets, profile, duration){
+    const target = Math.round(profile.nps * duration);
+    let kept = onsets.slice();
+    // 최소 간격 강제(강한 온셋 우선)
+    const minGap = profile.minGap/1000;
+    kept.sort((a,b)=> a.t - b.t);
+    const gapFiltered = [];
+    for(const o of kept){
+        const prev = gapFiltered[gapFiltered.length-1];
+        if(!prev || o.t - prev.t >= minGap){ gapFiltered.push(o); }
+        else if(o.strength > prev.strength){ gapFiltered[gapFiltered.length-1] = o; }
+    }
+    kept = gapFiltered;
+    // 아직 목표보다 많으면 약한 온셋부터 제거
+    if(kept.length > target){
+        const byStrength = kept.slice().sort((a,b)=> b.strength - a.strength).slice(0, target);
+        const set = new Set(byStrength);
+        kept = kept.filter(o => set.has(o));
+    }
+    return kept;
+}
+
+// ── 시드 RNG (재현 가능한 위치 분산) ──
+function mulberry32(seed){
+    return function(){
+        seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+        let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+}
+
+async function dGenerate(){
+    if(!buffer){ alert('음악을 먼저 불러오세요.'); return; }
+    const btn = document.getElementById('d-gen-btn');
+    const st = document.getElementById('d-status');
+    btn.disabled = true; st.textContent = '분석 중… (스펙트럴 플럭스)';
+    await new Promise(r=>setTimeout(r, 30));
+
+    const sensitivity = +dSens.value;
+    let res;
+    try{
+        res = detectOnsets(buffer, sensitivity);
+    }catch(err){
+        st.textContent = '분석 실패: ' + err.message;
+        btn.disabled = false; return;
+    }
+    const bpm = estimateBPM(res.onsets);
+    const profile = D_PROFILES[dDiff];
+    const kept = thinOnsets(res.onsets, profile, duration);
+
+    document.getElementById('d-bpm').textContent = bpm ? bpm.toFixed(1) : '—';
+    document.getElementById('d-onsets').textContent = res.onsets.length;
+
+    // ── 노트 생성 ──
+    const doHolds = document.getElementById('d-holds').checked;
+    const doSpread = document.getElementById('d-spread').checked;
+    const rng = mulberry32(Math.round(duration*1000) ^ kept.length);
+    const gen = [];
+    let x = 0.5, y = 0.5;
+    for(let i=0; i<kept.length; i++){
+        const o = kept[i];
+        const next = kept[i+1];
+        const gap = next ? next.t - o.t : 999;
+        // 위치: 부드러운 랜덤 워크
+        if(doSpread){
+            x += (rng()-0.5) * 0.5;
+            y += (rng()-0.5) * 0.34;
+            x = Math.max(0.13, Math.min(0.87, x));
+            y = Math.max(0.20, Math.min(0.80, y));
+        } else { x = 0.5; y = 0.5; }
+        let type = 'tap', dur = 0;
+        // 긴 저음 구간 → 홀드
+        if(doHolds && o.lowNorm > 0.45 && gap >= profile.holdMin){
+            type = 'hold';
+            dur = Math.round(Math.min(gap - 0.12, 1.6) * 1000) / 1000;
+            if(dur < 0.28){ type = 'tap'; dur = 0; }
+        }
+        gen.push({
+            t: Math.round(o.t*1000)/1000,
+            nx: Math.round(x*1000)/1000,
+            ny: Math.round(y*1000)/1000,
+            type, dur, src: 'd'
+        });
+    }
+
+    // 기존 AI 노트 교체
+    const hadOther = notes.some(n => n.src !== 'd');
+    notes = notes.filter(n => n.src !== 'd');
+    if(hadOther && gen.length){
+        // 다른 모드 노트는 유지, AI 노트만 추가
+    }
+    notes = [...notes, ...gen].sort((a,b)=> a.t - b.t);
+
+    document.getElementById('d-notes').textContent = gen.length;
+    const holdN = gen.filter(n=>n.type==='hold').length;
+    st.textContent = `완료 — ${gen.length}개 노트 (홀드 ${holdN}) · ${dDiff}`;
+    updateStats(); drawTL(); if(typeof bDrawTimeline==='function') bDrawTimeline();
+    btn.disabled = false;
+}
+document.getElementById('d-gen-btn').onclick = dGenerate;
+document.getElementById('d-clear-btn').onclick = ()=>{
+    const n = notes.filter(x=>x.src==='d').length;
+    if(!n){ return; }
+    if(confirm(`AI 생성 노트 ${n}개를 삭제할까요?`)){
+        notes = notes.filter(x=>x.src!=='d');
+        document.getElementById('d-notes').textContent = '—';
+        updateStats(); drawTL(); if(typeof bDrawTimeline==='function') bDrawTimeline();
+    }
+};
 
 // ── init ──
 updateStats();
