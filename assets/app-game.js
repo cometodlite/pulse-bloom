@@ -17,6 +17,9 @@ function getPhase(t, sections){
 function buildObjects(){
     const chart = SONG.charts[diff];
     const raw = chart.objects;
+    // Timing model: object `t` values are absolute seconds, already sync-corrected at authoring time.
+    // `chart.offset` (MILLISECONDS, added here) is the only runtime shift — a per-chart fine-tune, 0 for every current chart.
+    // `song.offset` (SECONDS) is NOT applied to notes; it only anchors the dev BPM grid (app-dev.js). Do not conflate the two.
     const chartShift = (chart.offset||0) / 1000;
     const sections = chart.sections || [];
     // For charts with uniform y:0.5, compute separate 2D crowning positions (cnx, cny)
