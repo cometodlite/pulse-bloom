@@ -294,10 +294,16 @@ input[type=number]{ width:80px; }
                 </div>
                 <div class="row">
                     <label class="lbl" style="display:flex;align-items:center;gap:6px;cursor:pointer">
-                        <input type="checkbox" id="d-holds" checked> 긴 저음 → 홀드 자동 생성
+                        <input type="checkbox" id="d-snap" checked> 박자 격자 스냅
                     </label>
                     <label class="lbl" style="display:flex;align-items:center;gap:6px;cursor:pointer">
-                        <input type="checkbox" id="d-spread" checked> 노트 위치 자동 분산
+                        <input type="checkbox" id="d-drag" checked> 빠른 연타 → 드래그
+                    </label>
+                    <label class="lbl" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                        <input type="checkbox" id="d-holds" checked> 긴 저음 → 홀드
+                    </label>
+                    <label class="lbl" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                        <input type="checkbox" id="d-spread" checked> 위치 자동 분산
                     </label>
                 </div>
                 <div class="row">
@@ -311,9 +317,11 @@ input[type=number]{ width:80px; }
                     <div><div class="v" style="color:#b07cff" id="d-notes">—</div><div class="k">생성된 노트</div></div>
                 </div>
                 <div class="hint">
-                    업로드한 음원을 스펙트럴 플럭스로 분석해 온셋(타격음)을 찾고,
-                    난이도별 목표 밀도에 맞춰 Rizline 스타일 노트를 배치합니다.
-                    같은 위치 노트 간격은 게임 판정창(<b>270ms</b>) 이상으로 강제됩니다.<br>
+                    음원을 <b>킥·스네어·하이햇</b> 3밴드로 분리해 온셋을 찾고, 난이도별 목표 밀도에
+                    맞춰 역할 우선순위(킥&gt;스네어&gt;하이햇)로 솎아 Rizline 스타일 노트를 배치합니다.<br>
+                    <b>박자 격자 스냅</b>: 추정 BPM 격자(16분·삼연)에 ±55ms 이내 온셋을 정렬 ·
+                    <b>드래그</b>: 빠른 연타 구간을 하나의 드래그 노트로 · 같은 위치 간격은 판정창(<b>270ms</b>) 이상 강제<br>
+                    BPM 추정이 빗나가면 <b>Mode B의 BPM 칸</b>에 정확한 값을 입력 후 다시 생성하세요 (격자 스냅이 그 값을 씁니다).<br>
                     생성 후 <b>Mode A/B/C</b>에서 세부 수정하고 아래에서 내보내세요.
                 </div>
             </div>
@@ -640,9 +648,9 @@ function drawTL(){
         const lane=n.lane!==undefined ? n.lane : Math.round(n.nx*(KEYS.length-1));
         const x=(t-t0)/span*TLW; const y=10+lane*laneH;
         const col=LANE_COLORS[lane%LANE_COLORS.length];
-        if(n.type==='hold'){
-            const x2=(t+n.dur-t0)/span*TLW;
-            tg.fillStyle=col+'66'; tg.fillRect(x, y+3, Math.max(4,x2-x), laneH-8);
+        if(n.type==='hold'||n.type==='drag'){
+            const x2=(t+(n.dur||0)-t0)/span*TLW;
+            tg.fillStyle=col+(n.type==='drag'?'40':'66'); tg.fillRect(x, y+3, Math.max(4,x2-x), laneH-8);
             tg.fillStyle=col; tg.fillRect(x, y+3, 4, laneH-8);
         } else {
             tg.fillStyle=col; tg.fillRect(x-3, y+3, 6, laneH-8);
@@ -1002,9 +1010,9 @@ document.getElementById('export-btn').onclick=()=>{
     const objects=notes.map(n=>{
         const t=Math.round(effT(n)*1000)/1000;
         const x=Math.round((n.nx||0.5)*1000)/1000;
-        const y=0.5;
+        const y=Math.round((n.ny==null?0.5:n.ny)*1000)/1000;
         const obj={t, x, y, type:n.type||'tap'};
-        if(n.type==='hold'&&n.dur>0) obj.dur=Math.round(n.dur*1000)/1000;
+        if((n.type==='hold'||n.type==='drag')&&n.dur>0) obj.dur=Math.round(n.dur*1000)/1000;
         return obj;
     });
     const jsonStr=JSON.stringify(objects,null,2);
@@ -1031,8 +1039,8 @@ document.getElementById('test-btn').onclick=()=>{
     const objects=notes.map(n=>{
         const t=Math.round(effT(n)*1000)/1000;
         const x=Math.round((n.nx||0.5)*1000)/1000;
-        const obj={t,x,y:0.5,type:n.type||'tap'};
-        if(n.type==='hold'&&n.dur>0) obj.dur=Math.round(n.dur*1000)/1000;
+        const obj={t,x,y:Math.round((n.ny==null?0.5:n.ny)*1000)/1000,type:n.type||'tap'};
+        if((n.type==='hold'||n.type==='drag')&&n.dur>0) obj.dur=Math.round(n.dur*1000)/1000;
         return obj;
     });
     const meta={
@@ -1055,8 +1063,8 @@ document.getElementById('import-input').addEventListener('change', async e=>{
         if(Array.isArray(data)){
             // Direct objects array [{t, nx, ny, type, dur}]
             imported=data.map(n=>({
-                t:n.t, nx:n.nx!==undefined?n.nx:(n.lane!==undefined?laneNX(n.lane):0.5),
-                ny:n.ny||0.5, type:n.type||'tap', dur:n.dur||0, src:'b'
+                t:n.t, nx:n.nx!==undefined?n.nx:(n.x!==undefined?n.x:(n.lane!==undefined?laneNX(n.lane):0.5)),
+                ny:n.ny!==undefined?n.ny:(n.y!==undefined?n.y:0.5), type:n.type||'tap', dur:n.dur||0, src:'b'
             }));
         } else if(data.notesAdjusted||data.notes){
             // Old pulsebloom-timing-v1 format
@@ -1311,6 +1319,8 @@ const D_PROFILES = {
     hard:    { nps: 4.0, minGap: 270, holdMin: 0.5 },
     extreme: { nps: 6.0, minGap: 270, holdMin: 0.45 },
 };
+// 드럼 역할 우선순위 (솎을 때 낮은 것부터 제거)
+const D_ROLE_PRIO = { kick: 3, snare: 2, broad: 1, hat: 0 };
 
 // ── 작은 radix-2 FFT (in-place, 실수/허수 배열) ──
 function fft(re, im){
@@ -1339,12 +1349,33 @@ function fft(re, im){
     }
 }
 
-// ── 온셋 검출: 스펙트럴 플럭스 + 적응형 임계 피크피킹 ──
+// ── 적응형 임계 피크피킹 (밴드별 재사용) ──
+function pickPeaks(flux, fps, sensitivity, minGapS, thrMul){
+    const nFrames = flux.length;
+    const W = 16;
+    const peaks = [];
+    let lastT = -1e9;
+    for(let f=1; f<nFrames-1; f++){
+        let sum=0, cnt=0;
+        for(let j=f-W; j<=f+W; j++){ if(j>=0 && j<nFrames){ sum+=flux[j]; cnt++; } }
+        const mean = sum/cnt;
+        const thr = mean * (thrMul / sensitivity);
+        if(flux[f] > thr && flux[f] >= flux[f-1] && flux[f] > flux[f+1]){
+            const t = f/fps;
+            if(t > 0.2 && t - lastT >= minGapS){
+                peaks.push({ t, strength: flux[f]/(mean+1e-6), frame: f });
+                lastT = t;
+            }
+        }
+    }
+    return peaks;
+}
+
+// ── 온셋 검출: 드럼 밴드 분리 (킥/스네어/하이햇) + 광대역 ──
 function detectOnsets(buf, sensitivity){
     const sr = buf.sampleRate;
     const ch = buf.numberOfChannels;
     const N = buf.length;
-    // 모노 믹스
     const mono = new Float32Array(N);
     for(let c=0; c<ch; c++){
         const d = buf.getChannelData(c);
@@ -1352,100 +1383,174 @@ function detectOnsets(buf, sensitivity){
     }
     const FFT = 1024, HOP = 512;
     const win = new Float32Array(FFT);
-    for(let i=0; i<FFT; i++) win[i] = 0.5 - 0.5*Math.cos(2*Math.PI*i/(FFT-1)); // Hann
-    const nFrames = Math.floor((N - FFT) / HOP);
-    const flux = new Float32Array(nFrames);
-    const lowE = new Float32Array(nFrames);       // 저역(≈<200Hz) 에너지 → 킥/베이스
+    for(let i=0; i<FFT; i++) win[i] = 0.5 - 0.5*Math.cos(2*Math.PI*i/(FFT-1));
+    const nFrames = Math.max(0, Math.floor((N - FFT) / HOP));
+    const fps = sr / HOP;
+    const binHz = sr / FFT;
+    // 밴드 경계 (Hz → bin)
+    const bLow  = Math.max(1, Math.round(150  / binHz));   // 킥: <150Hz
+    const bMid1 = Math.round(150  / binHz);
+    const bMid2 = Math.round(1800 / binHz);                // 스네어 바디: 150~1800Hz
+    const bHigh = Math.round(5000 / binHz);                // 하이햇/심벌: >5000Hz
+    const fluxLow = new Float32Array(nFrames);
+    const fluxMid = new Float32Array(nFrames);
+    const fluxHigh= new Float32Array(nFrames);
+    const fluxAll = new Float32Array(nFrames);
+    const lowMag  = new Float32Array(nFrames);
     const prevMag = new Float32Array(FFT/2);
     const re = new Float32Array(FFT), im = new Float32Array(FFT);
-    const lowBin = Math.max(1, Math.floor(200 / (sr/FFT)));
+    const half = FFT/2;
     for(let f=0; f<nFrames; f++){
         const off = f*HOP;
         for(let i=0; i<FFT; i++){ re[i] = mono[off+i]*win[i]; im[i] = 0; }
         fft(re, im);
-        let sf = 0, le = 0;
-        for(let k=0; k<FFT/2; k++){
+        let sL=0, sM=0, sH=0, sA=0, eL=0;
+        for(let k=0; k<half; k++){
             const mag = Math.hypot(re[k], im[k]);
             const diff = mag - prevMag[k];
-            if(diff > 0) sf += diff;
-            if(k <= lowBin) le += mag;
+            const pos = diff > 0 ? diff : 0;
+            sA += pos;
+            if(k < bLow){ sL += pos; eL += mag; }
+            if(k >= bMid1 && k < bMid2) sM += pos;
+            if(k >= bHigh) sH += pos;
             prevMag[k] = mag;
         }
-        flux[f] = sf;
-        lowE[f] = le;
+        fluxLow[f]=sL; fluxMid[f]=sM; fluxHigh[f]=sH; fluxAll[f]=sA; lowMag[f]=eL;
     }
-    // 적응형 임계: 이동평균 * (1 + 여유) / 민감도
-    const W = 16;
-    const onsets = [];
-    const fps = sr / HOP;
-    let lastT = -1;
-    for(let f=1; f<nFrames-1; f++){
-        let sum=0, cnt=0;
-        for(let j=f-W; j<=f+W; j++){ if(j>=0 && j<nFrames){ sum+=flux[j]; cnt++; } }
-        const mean = sum/cnt;
-        const thr = mean * (1.35 / sensitivity);
-        if(flux[f] > thr && flux[f] >= flux[f-1] && flux[f] > flux[f+1]){
-            const t = f/fps;
-            if(t > 0.2 && t - lastT >= 0.05){
-                onsets.push({ t, strength: flux[f]/(mean+1e-6), low: lowE[f] });
-                lastT = t;
-            }
+    // 밴드별 피크 → 역할 태깅
+    const tagged = [];
+    for(const p of pickPeaks(fluxLow,  fps, sensitivity, 0.09, 1.5))  tagged.push({...p, band:'kick'});
+    for(const p of pickPeaks(fluxMid,  fps, sensitivity, 0.08, 1.45)) tagged.push({...p, band:'snare'});
+    for(const p of pickPeaks(fluxHigh, fps, sensitivity, 0.05, 1.6))  tagged.push({...p, band:'hat'});
+    for(const p of pickPeaks(fluxAll,  fps, sensitivity, 0.06, 1.35)) tagged.push({...p, band:'broad'});
+    tagged.sort((a,b)=> a.t - b.t);
+    // 근접(≤45ms) 온셋 병합 — 우선순위 높은 밴드 유지, strength는 최대
+    const merged = [];
+    for(const o of tagged){
+        const prev = merged[merged.length-1];
+        if(prev && o.t - prev.t <= 0.045){
+            prev.bands = (prev.bands||new Set([prev.band]));
+            prev.bands.add(o.band);
+            if(D_ROLE_PRIO[o.band] > D_ROLE_PRIO[prev.band]){ prev.band = o.band; prev.frame = o.frame; }
+            prev.strength = Math.max(prev.strength, o.strength);
+        } else {
+            merged.push({ t:o.t, strength:o.strength, band:o.band, frame:o.frame, bands:new Set([o.band]) });
         }
     }
-    // 저역 에너지 정규화
+    // 저역 에너지 정규화 (홀드 판정용)
     let maxLow = 1e-6;
-    for(let f=0; f<nFrames; f++) if(lowE[f]>maxLow) maxLow=lowE[f];
-    for(const o of onsets) o.lowNorm = o.low/maxLow;
-    return { onsets, flux, fps };
+    for(let f=0; f<nFrames; f++) if(lowMag[f]>maxLow) maxLow=lowMag[f];
+    for(const o of merged){
+        o.lowNorm = (lowMag[Math.min(nFrames-1, o.frame|0)] || 0) / maxLow;
+        o.prio = D_ROLE_PRIO[o.band];
+    }
+    return { onsets: merged, fps };
 }
 
 // ── 온셋 간격 히스토그램 → BPM 추정 ──
 function estimateBPM(onsets){
-    if(onsets.length < 8) return null;
+    // 킥/스네어(강한 비트) 위주로 IOI 수집
+    const beats = onsets.filter(o => o.prio >= 2);
+    const src = beats.length >= 12 ? beats : onsets;
+    if(src.length < 8) return null;
     const iois = [];
-    for(let i=1; i<onsets.length; i++){
-        const d = onsets[i].t - onsets[i-1].t;
-        if(d > 0.12 && d < 1.5) iois.push(d);
+    for(let i=1; i<src.length; i++){
+        const d = src[i].t - src[i-1].t;
+        if(d > 0.12 && d < 1.6) iois.push(d);
     }
     if(!iois.length) return null;
-    // 60..200 BPM 범위에서 최적 주기 탐색
     let best=null, bestScore=-1;
-    for(let bpm=60; bpm<=200; bpm+=0.5){
+    for(let bpm=60; bpm<=200; bpm+=0.25){
         const period = 60/bpm;
         let score = 0;
         for(const d of iois){
             const ratio = d/period;
-            const near = Math.abs(ratio - Math.round(ratio));
-            if(Math.round(ratio) >= 1 && Math.round(ratio) <= 4 && near < 0.12) score++;
+            const r = Math.round(ratio);
+            const near = Math.abs(ratio - r);
+            if(r >= 1 && r <= 4 && near < 0.1) score += 1 - near*5;
         }
         if(score > bestScore){ bestScore = score; best = bpm; }
     }
-    // 일반적인 범위(70~140)로 옥타브 폴딩
     if(best){
-        while(best > 140) best /= 2;
-        while(best < 70)  best *= 2;
+        while(best > 145) best /= 2;
+        while(best < 68)  best *= 2;
     }
     return best;
 }
 
-// ── 목표 밀도에 맞춰 온셋 솎기 ──
+// ── 격자 위상(offset) 추정: 온셋이 가장 잘 맞는 grid 원점 ──
+function estimateGrid(onsets, bpm){
+    if(!bpm) return null;
+    const period = 60/bpm;
+    const sub = period/4;              // 16분음표 격자
+    const strong = onsets.filter(o => o.prio >= 1);
+    let bestOff=0, bestScore=-1;
+    for(let k=0; k<24; k++){
+        const off = k*sub/24;
+        let score=0;
+        for(const o of strong){
+            const ph = ((o.t - off) % sub + sub) % sub;
+            const err = Math.min(ph, sub-ph);
+            if(err < 0.035) score += (o.prio+1);
+        }
+        if(score>bestScore){ bestScore=score; bestOff=off; }
+    }
+    return { bpm, period, sub, offset: bestOff };
+}
+
+// ── 온셋을 16/12분음표 격자에 스냅 (임계 내에서만) ──
+function snapToGrid(t, grid, maxErr){
+    if(!grid) return t;
+    const cands = [grid.sub, grid.period/3, grid.period/6]; // 16th, 8th삼연, 16th삼연
+    let bestT=t, bestErr=maxErr;
+    for(const step of cands){
+        const s = Math.round((t - grid.offset)/step)*step + grid.offset;
+        const e = Math.abs(s - t);
+        if(e < bestErr){ bestErr=e; bestT=s; }
+    }
+    return Math.round(bestT*1000)/1000;
+}
+
+// ── 빠른 연타 구간 → 단일 드래그 노트 ──
+// 진짜 롤/스트림(32분음표급, ≥0.35s 지속)만 드래그로. 16분음표 연타는 탭 유지.
+function detectDragRuns(onsets, bpm){
+    const fast = bpm ? Math.min(0.125, (60/bpm)/6) : 0.115;  // 24분음표보다 빠른 간격
+    const runs = [];
+    let i = 0;
+    while(i < onsets.length){
+        let j = i;
+        while(j+1 < onsets.length && onsets[j+1].t - onsets[j].t <= fast) j++;
+        const span = onsets[j].t - onsets[i].t;
+        if(j - i >= 4 && span >= 0.35){
+            runs.push({ start: onsets[i].t, end: onsets[j].t, from: i, to: j });
+            i = j + 1;
+        } else {
+            i++;
+        }
+    }
+    return runs;
+}
+
+// ── 목표 밀도에 맞춰 온셋 솎기 (드럼 역할 우선) ──
 function thinOnsets(onsets, profile, duration){
     const target = Math.round(profile.nps * duration);
-    let kept = onsets.slice();
-    // 최소 간격 강제(강한 온셋 우선)
     const minGap = profile.minGap/1000;
-    kept.sort((a,b)=> a.t - b.t);
+    let kept = onsets.slice().sort((a,b)=> a.t - b.t);
+    // 최소 간격 강제: 겹치면 (역할 우선순위 → strength) 높은 쪽 유지
     const gapFiltered = [];
     for(const o of kept){
         const prev = gapFiltered[gapFiltered.length-1];
         if(!prev || o.t - prev.t >= minGap){ gapFiltered.push(o); }
-        else if(o.strength > prev.strength){ gapFiltered[gapFiltered.length-1] = o; }
+        else {
+            const better = o.prio > prev.prio || (o.prio === prev.prio && o.strength > prev.strength);
+            if(better) gapFiltered[gapFiltered.length-1] = o;
+        }
     }
     kept = gapFiltered;
-    // 아직 목표보다 많으면 약한 온셋부터 제거
+    // 목표 초과 시: 역할 우선순위 낮은 것(하이햇 스트림)부터, 그 안에서 약한 것부터 제거
     if(kept.length > target){
-        const byStrength = kept.slice().sort((a,b)=> b.strength - a.strength).slice(0, target);
-        const set = new Set(byStrength);
+        const ranked = kept.slice().sort((a,b)=> (b.prio - a.prio) || (b.strength - a.strength));
+        const set = new Set(ranked.slice(0, target));
         kept = kept.filter(o => set.has(o));
     }
     return kept;
@@ -1476,56 +1581,103 @@ async function dGenerate(){
         st.textContent = '분석 실패: ' + err.message;
         btn.disabled = false; return;
     }
-    const bpm = estimateBPM(res.onsets);
+    const doSnap  = document.getElementById('d-snap').checked;
+    const doDrag  = document.getElementById('d-drag').checked;
+    const doHolds = document.getElementById('d-holds').checked;
+    const doSpread= document.getElementById('d-spread').checked;
     const profile = D_PROFILES[dDiff];
-    const kept = thinOnsets(res.onsets, profile, duration);
+
+    // BPM: Mode B에서 사용자가 값을 바꿨으면 그걸 신뢰, 아니면 자동 추정
+    const bpmField = +document.getElementById('b-bpm').value;
+    const bpmAuto = estimateBPM(res.onsets);
+    const userSetBpm = bpmField && Math.abs(bpmField - 120) > 0.01;
+    const bpm = userSetBpm ? bpmField : bpmAuto;
+    if(!userSetBpm && bpmAuto) document.getElementById('b-bpm').value = bpmAuto.toFixed(2);
+    let grid = estimateGrid(res.onsets, bpm);
+    // Mode B offset가 설정돼 있으면 격자 원점으로 사용
+    const bOffMs = +document.getElementById('b-offset-ms').value;
+    if(grid && bOffMs) grid.offset = ((bOffMs/1000) % grid.sub + grid.sub) % grid.sub;
+
+    // ① 격자 스냅
+    if(doSnap && grid){
+        for(const o of res.onsets) o.t = snapToGrid(o.t, grid, 0.055);
+        // 스냅으로 동일 t가 생기면 하나로
+        res.onsets.sort((a,b)=> a.t - b.t || b.prio - a.prio);
+        const dedup = [];
+        for(const o of res.onsets){
+            const p = dedup[dedup.length-1];
+            if(p && Math.abs(o.t - p.t) < 1e-6){ p.strength = Math.max(p.strength, o.strength); }
+            else dedup.push(o);
+        }
+        res.onsets = dedup;
+    }
+
+    // ③ 빠른 연타 → 드래그 (솎기 전, 원본 밀도 기준)
+    const dragRuns = doDrag ? detectDragRuns(res.onsets, bpm) : [];
+    const inRun = new Set();
+    for(const r of dragRuns) for(let k=r.from; k<=r.to; k++) inRun.add(res.onsets[k]);
+
+    // 드래그 구간 밖 온셋만 밀도 솎기
+    const solo = res.onsets.filter(o => !inRun.has(o));
+    const kept = thinOnsets(solo, profile, duration);
 
     document.getElementById('d-bpm').textContent = bpm ? bpm.toFixed(1) : '—';
     document.getElementById('d-onsets').textContent = res.onsets.length;
 
     // ── 노트 생성 ──
-    const doHolds = document.getElementById('d-holds').checked;
-    const doSpread = document.getElementById('d-spread').checked;
-    const rng = mulberry32(Math.round(duration*1000) ^ kept.length);
+    const rng = mulberry32(Math.round(duration*1000) ^ (kept.length*7 + dragRuns.length));
     const gen = [];
-    let x = 0.5, y = 0.5;
+    // 중심(0)에서 배회하되 평균 회귀 — 한 방향으로 쏠리지 않음
+    let wx = 0, wy = 0, snareSide = 1;
+    function place(o){
+        if(!doSpread){ return { x:0.5, y:0.5 }; }
+        wx += (rng()-0.5) * 0.42 - wx * 0.22;
+        wy += (rng()-0.5) * 0.30 - wy * 0.28;
+        let bx = 0, by = 0;
+        if(o){
+            if(o.band === 'kick')  by =  0.12;   // 킥은 아래쪽
+            if(o.band === 'hat')   by = -0.12;   // 하이햇은 위쪽
+            if(o.band === 'snare'){ snareSide *= -1; bx = snareSide * 0.18; }
+        }
+        const x = Math.max(0.13, Math.min(0.87, 0.5 + wx + bx));
+        const y = Math.max(0.20, Math.min(0.80, 0.5 + wy + by));
+        return { x, y };
+    }
+
     for(let i=0; i<kept.length; i++){
         const o = kept[i];
         const next = kept[i+1];
         const gap = next ? next.t - o.t : 999;
-        // 위치: 부드러운 랜덤 워크
-        if(doSpread){
-            x += (rng()-0.5) * 0.5;
-            y += (rng()-0.5) * 0.34;
-            x = Math.max(0.13, Math.min(0.87, x));
-            y = Math.max(0.20, Math.min(0.80, y));
-        } else { x = 0.5; y = 0.5; }
+        const p = place(o);
         let type = 'tap', dur = 0;
-        // 긴 저음 구간 → 홀드
         if(doHolds && o.lowNorm > 0.45 && gap >= profile.holdMin){
             type = 'hold';
             dur = Math.round(Math.min(gap - 0.12, 1.6) * 1000) / 1000;
             if(dur < 0.28){ type = 'tap'; dur = 0; }
         }
+        gen.push({ t: Math.round(o.t*1000)/1000, nx:+p.x.toFixed(3), ny:+p.y.toFixed(3), type, dur, src:'d' });
+    }
+    // 드래그 노트
+    for(const r of dragRuns){
+        const p = place(null);
         gen.push({
-            t: Math.round(o.t*1000)/1000,
-            nx: Math.round(x*1000)/1000,
-            ny: Math.round(y*1000)/1000,
-            type, dur, src: 'd'
+            t: Math.round(r.start*1000)/1000,
+            nx:+p.x.toFixed(3), ny:+p.y.toFixed(3),
+            type:'drag',
+            dur: Math.round(Math.max(0.2, r.end - r.start)*1000)/1000,
+            src:'d'
         });
     }
+    gen.sort((a,b)=> a.t - b.t);
 
-    // 기존 AI 노트 교체
-    const hadOther = notes.some(n => n.src !== 'd');
     notes = notes.filter(n => n.src !== 'd');
-    if(hadOther && gen.length){
-        // 다른 모드 노트는 유지, AI 노트만 추가
-    }
     notes = [...notes, ...gen].sort((a,b)=> a.t - b.t);
 
     document.getElementById('d-notes').textContent = gen.length;
     const holdN = gen.filter(n=>n.type==='hold').length;
-    st.textContent = `완료 — ${gen.length}개 노트 (홀드 ${holdN}) · ${dDiff}`;
+    const dragN = gen.filter(n=>n.type==='drag').length;
+    const snapNote = doSnap && grid ? ' · 격자스냅' : '';
+    st.textContent = `완료 — ${gen.length}노트 (홀드 ${holdN} · 드래그 ${dragN})${snapNote} · ${dDiff}`;
     updateStats(); drawTL(); if(typeof bDrawTimeline==='function') bDrawTimeline();
     btn.disabled = false;
 }
