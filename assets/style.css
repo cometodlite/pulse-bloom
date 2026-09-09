@@ -171,7 +171,11 @@ input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; he
 .seg.diff button.locked:hover { transform:none; }
 
 /* song select */
-.song-list { display:flex; flex-direction:column; gap:14px; width:min(460px,92vw); margin-top:26px; }
+.song-list { display:flex; flex-direction:column; gap:14px; width:min(460px,92vw); margin-top:26px;
+    max-height:calc(100dvh - 190px); overflow-y:auto; overscroll-behavior:contain;
+    -webkit-overflow-scrolling:touch; padding:6px 10px; scrollbar-width:thin; }
+.song-list::-webkit-scrollbar { width:8px; }
+.song-list::-webkit-scrollbar-thumb { background:rgba(176,124,255,.35); border-radius:8px; }
 .song-card { text-align:left; padding:18px 20px; border-radius:16px; cursor:pointer;
     border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.035); transition:.15s; }
 .song-card:hover { border-color:#b07cff; background:rgba(176,124,255,.12); transform:translateY(-2px);
